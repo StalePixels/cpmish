@@ -1,4 +1,5 @@
-/* qe © 2019 David Given
+/*
+ * based on qe © 2019 David Given
  * This library is distributable under the terms of the 2-clause BSD license.
  * See COPYING.cpmish in the distribution root directory for more information.
  */
@@ -12,9 +13,15 @@
 #include <fcntl.h>
 #include <ctype.h>
 #include <limits.h>
-#include <cpm.h>
-#include "libcuss.h"
 
+#include <z80.h>
+#include <arch/zxn.h>
+#include <arch/zxn/esxdos.h>
+
+#include "esxcuss/libcuss.h"
+
+#pragma printf = "%ld %lu %d %s %c %u %X"
+#pragma output CLIB_EXIT_STACK_SIZE = 1
 #define WIDTH SCREENWIDTH
 #define HEIGHT (SCREENHEIGHT-1)
 
@@ -55,6 +62,20 @@ extern const struct bindings change_bindings;
 extern void colon(uint16_t count);
 extern void goto_line(uint16_t lineno);
 
+/* ======================================================================= */
+/*                                FAKED LIBCUSS                            */
+/* ======================================================================= */
+void con_goto(uint16_t x, uint16_t y) {
+
+}
+extern void con_clear(void);
+extern void con_putc(uint16_t c);
+extern void con_puts(const char* s);
+extern uint8_t con_getc(void);
+extern void con_newline(void);
+extern void con_clear_to_eol(void);
+extern void con_revon(void);
+extern void con_revoff(void);
 /* ======================================================================= */
 /*                                MISCELLANEOUS                            */
 /* ======================================================================= */
@@ -1087,12 +1108,21 @@ void colon(uint16_t count)
 /*                            EDITOR OPERATIONS                            */
 /* ======================================================================= */
 
+unsigned char orig_mmu6, orig_mmu7;
+
 void main(int argc, const char* argv[])
 {
-	if (cpm_fcb.f[0] == ' ')
-		cpm_fcb.f[0] = 0;
+    intrinsic_di();
+    // Store original paging configuration
+    orig_mmu6 = ZXN_READ_REG(REG_MMU0 + 6);
+    orig_mmu7 = ZXN_READ_REG(REG_MMU0 + 7);
 
-	cpm_overwrite_ccp();
+    // Initalise the system
+    ZXN_WRITE_MMU6(_z_page_table[PAGE_INIT0]);
+    ZXN_WRITE_MMU7(_z_page_table[PAGE_INIT1]);
+
+    banked_init();
+
 	con_clear();
 
 	buffer_start = cpm_ram;
@@ -1164,4 +1194,17 @@ void main(int argc, const char* argv[])
 			command_count = 0;
 		}
 	}
+}
+
+void at_exit() {
+    // Shutdown gracefully
+    ZXN_WRITE_MMU6(_z_page_table[PAGE_INIT0]);
+    ZXN_WRITE_MMU7(_z_page_table[PAGE_INIT1]);
+
+    banked_exit();
+
+    // Restore original paging configuration
+    ZXN_WRITE_MMU6(orig_mmu6);
+    ZXN_WRITE_MMU7(orig_mmu7);
+    intrinsic_ei();
 }
