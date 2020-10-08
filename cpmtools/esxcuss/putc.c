@@ -3,8 +3,8 @@
  * See COPYING.cpmish in the distribution root directory for more information.
  */
 
-#include <cpm.h>
 #include "libcuss.h"
+#include "textmode.h"
 
 void con_putc(uint16_t c)
 {
@@ -17,7 +17,7 @@ void con_putc(uint16_t c)
             c += '@';
     }
 
-    tilemap[tm_row][tm_col].tile = c;
+    tilemap[screeny][screenx].tile = c;
     screenx++;
     if (screenx == SCREENWIDTH)
     {

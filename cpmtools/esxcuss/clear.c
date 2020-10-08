@@ -3,8 +3,8 @@
  * See COPYING.cpmish in the distribution root directory for more information.
  */
 
-#include <cpm.h>
 #include <string.h>
+#include "libcuss.h"
 #include "textmode.h"
 
 void con_clear(void)

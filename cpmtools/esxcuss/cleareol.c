@@ -3,7 +3,6 @@
  * See COPYING.cpmish in the distribution root directory for more information.
  */
 
-#include <cpm.h>
 #include "libcuss.h"
 
 void con_clear_to_eol(void)
@@ -19,6 +18,5 @@ void con_clear_to_eol(void)
         con_putc(' ');
     con_goto(screenx, screeny);
 
-    #endif
 }
 

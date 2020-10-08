@@ -3,7 +3,6 @@
  * See COPYING.cpmish in the distribution root directory for more information.
  */
 
-#include <cpm.h>
 #include "libcuss.h"
 
 void con_puts(const char* s)

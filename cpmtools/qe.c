@@ -15,15 +15,28 @@
 #include <limits.h>
 
 #include <z80.h>
+#include <intrinsic.h>
 #include <arch/zxn.h>
+#include <arch/zx/esxdos.h>
 #include <arch/zxn/esxdos.h>
+#include <errno.h>
 
 #include "esxcuss/libcuss.h"
+#include "qe_banked.h"
 
-#pragma printf = "%ld %lu %d %s %c %u %X"
-#pragma output CLIB_EXIT_STACK_SIZE = 1
+
+#define PAGE_INIT               94 /*47*/
+#define PAGE_INIT0              94
+#define PAGE_INIT1              95
+extern unsigned char _z_page_table[];
+
 #define WIDTH SCREENWIDTH
 #define HEIGHT (SCREENHEIGHT-1)
+
+unsigned char file_handle;
+
+int file_exists;
+const char* file_arg;
 
 uint16_t screenx, screeny;
 uint16_t status_line_length;
@@ -57,61 +70,24 @@ extern const struct bindings delete_bindings;
 extern const struct bindings zed_bindings;
 extern const struct bindings change_bindings;
 
-#define buffer ((char*)cpm_default_dma)
+char buffer[128];// ((char*)cpm_default_dma)
 
 extern void colon(uint16_t count);
 extern void goto_line(uint16_t lineno);
 
-/* ======================================================================= */
-/*                                FAKED LIBCUSS                            */
-/* ======================================================================= */
-void con_goto(uint16_t x, uint16_t y) {
-
-}
-extern void con_clear(void);
-extern void con_putc(uint16_t c);
-extern void con_puts(const char* s);
-extern uint8_t con_getc(void);
-extern void con_newline(void);
-extern void con_clear_to_eol(void);
-extern void con_revon(void);
-extern void con_revoff(void);
 /* ======================================================================= */
 /*                                MISCELLANEOUS                            */
 /* ======================================================================= */
 
 void print_newline(void)
 {
-	cpm_printstring0("\r\n");
+    con_newline();
 }
 
 /* Appends a string representation of the FCB to buffer. */
-void render_fcb(FCB* fcb)
+void render_fcb(char* fcb)
 {
-	const uint8_t* inp;
-	char* outp = buffer;
-
-	while (*outp)
-		outp++;
-
-	if (fcb->dr)
-	{
-		*outp++ = '@' + fcb->dr;
-		*outp++ = ':';
-	}
-
-	inp = &fcb->f[0];
-	while (inp != &fcb->f[12])
-	{
-		uint8_t c;
-		if (inp == &fcb->f[8])
-			*outp++ = '.';
-		c = *inp++;
-		if (c != ' ')
-			*outp++ = c;
-	}
-
-	*outp++ = '\0';
+	memcpy(buffer, fcb, strlen(fcb));
 }
 
 /* ======================================================================= */
@@ -146,7 +122,7 @@ void set_status_line(const char* message)
 	con_revoff();
 	while (length < status_line_length)
 	{
-		cpm_bios_conout(' ');
+		con_putc(' ');
 		length++;
 	}
 	status_line_length = length;
@@ -165,7 +141,7 @@ void new_file(void)
 	first_line = current_line = buffer_start;
 	dirty = true;
 }
-	
+
 uint16_t compute_length(const uint8_t* inp, const uint8_t* endp, const uint8_t** nextp)
 {
 	static uint16_t xo;
@@ -291,7 +267,7 @@ void recompute_screen_position(void)
 
 	if (current_line < first_line)
 		adjust_scroll_position();
-	
+
 	for (;;)
 	{
 		inp = first_line;
@@ -326,7 +302,7 @@ void redraw_current_line(void)
 {
 	uint8_t* nextp;
 	uint16_t oldheight;
-	
+
 	oldheight = display_height[current_line_y];
 	con_goto(0, current_line_y);
 	nextp = draw_line(current_line);
@@ -344,45 +320,48 @@ void redraw_current_line(void)
 void insert_file(void)
 {
 	strcpy(buffer, "Reading ");
-	render_fcb(&cpm_fcb);
+//	render_fcb(&cpm_fcb);
 	print_status(buffer);
 
-	cpm_fcb.ex = cpm_fcb.s1 = cpm_fcb.s2 = cpm_fcb.rc = 0;
-	if (cpm_open_file(&cpm_fcb) == 0xff)
-		goto error;
+//	cpm_fcb.ex = cpm_fcb.s1 = cpm_fcb.s2 = cpm_fcb.rc = 0;
 
-	for (;;)
-	{
-		uint8_t* inptr;
 
-		int i = cpm_read_sequential(&cpm_fcb);
-		if (i == 1) /* EOF */
-			goto done;
-		if (i != 0)
-			goto error;
+    errno = 0;
+//    file_handle = esxdos_f_open(cpm_fcb, ESXDOS_MODE_R);
+    if(errno) goto error;
 
-		inptr = cpm_default_dma;
-		while (inptr != (cpm_default_dma+128))
-		{
-			uint8_t c = *inptr++;
-			if (c == 26) /* EOF */
-				break;
-			if (c != '\r')
-			{
-				if (gap_start == gap_end)
-				{
-					print_status("Out of memory");
-					goto done;
-				}
-				*gap_start++ = c;
-			}
-		}
-	}
+//	for (;;)
+//	{
+//		uint8_t* inptr;
+//
+//		int i = cpm_read_sequential(&cpm_fcb);
+//		if (i == 1) /* EOF */
+//			goto done;
+//		if (i != 0)
+//			goto error;
+//
+//		inptr = cpm_default_dma;
+//		while (inptr != (cpm_default_dma+128))
+//		{
+//			uint8_t c = *inptr++;
+//			if (c == 26) /* EOF */
+//				break;
+//			if (c != '\r')
+//			{
+//				if (gap_start == gap_end)
+//				{
+//					print_status("Out of memory");
+//					goto done;
+//				}
+//				*gap_start++ = c;
+//			}
+//		}
+//	}
 
 error:
 	print_status("Could not read file");
 done:
-	cpm_close_file(&cpm_fcb);
+//	esxdos_f_close(cpm_fcb);
 	dirty = true;
 	return;
 }
@@ -390,123 +369,122 @@ done:
 void load_file(void)
 {
 	new_file();
-	if (cpm_fcb.f[0])
+    if(file_exists)
 		insert_file();
 
 	dirty = false;
 	goto_line(1);
 }
 
-bool really_save_file(FCB* fcb)
+bool really_save_file(char* fcb)
 {
-	const uint8_t* inp;
-	uint8_t* outp;
-	static uint16_t pushed;
-
-	strcpy(buffer, "Writing ");
-	render_fcb(fcb);
-	print_status(buffer);
-
-	fcb->ex = fcb->s1 = fcb->s2 = fcb->rc = 0;
-	if (cpm_make_file(fcb) == 0xff)
-		return false;
-	fcb->cr = 0;
-
-	inp = buffer_start;
-	outp = cpm_default_dma;
-	pushed = 0;
-	while ((inp != buffer_end) || (outp != cpm_default_dma) || pushed)
-	{
-		static uint16_t c;
-
-		if (pushed)
-		{
-			c = pushed;
-			pushed = 0;
-		}
-		else
-		{
-			if (inp == gap_start)
-				inp = gap_end;
-			c = (inp != buffer_end) ? *inp++ : 26;
-
-			if (c == '\n')
-			{
-				pushed = '\n';
-				c = '\r';
-			}
-		}
-		
-		*outp++ = c;
-
-		if (outp == (cpm_default_dma+128))
-		{
-			if (cpm_write_sequential(fcb) == 0xff)
-				goto error;
-			outp = cpm_default_dma;
-		}
-	}
-	
-	dirty = false;
-	return cpm_close_file(fcb) != 0xff;
-
-error:
-	cpm_close_file(fcb);
+//	const uint8_t* inp;
+//	uint8_t* outp;
+//	static uint16_t pushed;
+//
+//	strcpy(buffer, "Writing ");
+//	render_fcb(fcb);
+//	print_status(buffer);
+//
+//	if (cpm_make_file(fcb) == 0xff)
+//		return false;
+//	fcb->cr = 0;
+//
+//	inp = buffer_start;
+//	outp = cpm_default_dma;
+//	pushed = 0;
+//	while ((inp != buffer_end) || (outp != cpm_default_dma) || pushed)
+//	{
+//		static uint16_t c;
+//
+//		if (pushed)
+//		{
+//			c = pushed;
+//			pushed = 0;
+//		}
+//		else
+//		{
+//			if (inp == gap_start)
+//				inp = gap_end;
+//			c = (inp != buffer_end) ? *inp++ : 26;
+//
+//			if (c == '\n')
+//			{
+//				pushed = '\n';
+//				c = '\r';
+//			}
+//		}
+//
+//		*outp++ = c;
+//
+//		if (outp == (cpm_default_dma+128))
+//		{
+//			if (cpm_write_sequential(fcb) == 0xff)
+//				goto error;
+//			outp = cpm_default_dma;
+//		}
+//	}
+//
+//	dirty = false;
+//	return cpm_close_file(fcb) != 0xff;
+//
+//error:
+//	cpm_close_file(fcb);
 	return false;
 }
 
 bool save_file(void)
 {
-	static FCB tempfcb;
-
-	if (cpm_open_file(&cpm_fcb) == 0xff)
-	{
-		/* The file does not exist. */
-		if (really_save_file(&cpm_fcb))
-		{
-			dirty = false;
-			return true;
-		}
-		else
-		{
-			print_status("Failed to save file");
-			return false;
-		}
-	}
-
-	/* Write to a temporary file. */
-
-	strcpy((char*)tempfcb.f, "QETEMP  $$$");
-	tempfcb.dr = cpm_fcb.dr;
-	if (really_save_file(&tempfcb) == 0xff)
-		goto tempfile;
-
-	strcpy(buffer, "Renaming ");
-	render_fcb(&tempfcb);
-	strcat(buffer, " to ");
-	render_fcb(&cpm_fcb);
-	print_status(buffer);
-
-	if (cpm_delete_file(&cpm_fcb) == 0xff)
-		goto commit;
-	memcpy(((uint8_t*) &tempfcb) + 16, &cpm_fcb, 16);
-	if (cpm_rename_file((RCB*) &tempfcb) == 0xff)
-		goto commit;
-	return true;
-
-tempfile:
-	print_status("Cannot create QETEMP.$$$ file (it may exist)");
-	return false;
-
-commit:
-	print_status("Cannot commit file; your data may be in QETEMP.$$$");
+//	static FCB tempfcb;
+//
+//	if (cpm_open_file(&cpm_fcb) == 0xff)
+//	{
+//		/* The file does not exist. */
+//		if (really_save_file(&cpm_fcb))
+//		{
+//			dirty = false;
+//			return true;
+//		}
+//		else
+//		{
+//			print_status("Failed to save file");
+//			return false;
+//		}
+//	}
+//
+//	/* Write to a temporary file. */
+//
+//	strcpy((char*)tempfcb.f, "QETEMP  $$$");
+//	tempfcb.dr = cpm_fcb.dr;
+//	if (really_save_file(&tempfcb) == 0xff)
+//		goto tempfile;
+//
+//	strcpy(buffer, "Renaming ");
+//	render_fcb(&tempfcb);
+//	strcat(buffer, " to ");
+//	render_fcb(&cpm_fcb);
+//	print_status(buffer);
+//
+//	if (cpm_delete_file(&cpm_fcb) == 0xff)
+//		goto commit;
+//	memcpy(((uint8_t*) &tempfcb) + 16, &cpm_fcb, 16);
+//	if (cpm_rename_file((RCB*) &tempfcb) == 0xff)
+//		goto commit;
+//	return true;
+//
+//tempfile:
+//	print_status("Cannot create QETEMP.$$$ file (it may exist)");
+//	return false;
+//
+//commit:
+//	print_status("Cannot commit file; your data may be in QETEMP.$$$");
 	return false;
 }
 
 void quit(void)
 {
-	cpm_printstring0("\032Goodbye!\r\n");
-	cpm_exit();
+	con_puts("\032Goodbye!\r\n");
+	exit(0);
 }
 
 /* ======================================================================= */
@@ -856,7 +834,7 @@ void zed_save_and_quit(uint16_t count)
 {
 	if (!dirty)
 		quit();
-	if (!cpm_fcb.f[0])
+	if (!file_exists)
 	{
 		set_status_line("No filename set");
 		return;
@@ -984,23 +962,23 @@ const struct bindings zed_bindings =
 
 void set_current_filename(const char* f)
 {
-	cpm_parse_filename(&cpm_fcb, f);
+	file_arg = f;
 	dirty = true;
 }
 
 void print_no_filename(void)
 {
-	cpm_printstring0("No filename set\r\n");
+	con_puts("No filename set\r\n");
 }
 
 void print_document_not_saved(void)
 {
-	cpm_printstring0("Document not saved (use ! to confirm)\r\n");
+    con_puts("Document not saved (use ! to confirm)\r\n");
 }
 
 void print_colon_status(const char* s)
 {
-	cpm_printstring0(s);
+	con_puts(s);
 	print_newline();
 }
 
@@ -1014,10 +992,10 @@ void colon(uint16_t count)
 		char* arg;
 
 		goto_status_line();
-		cpm_conout(':');
+		con_putc(':');
 		buffer[0] = 126;
 		buffer[1] = 0;
-		cpm_readline((uint8_t*) buffer);
+//		cpm_readline((uint8_t*) buffer);
 		print_newline();
 
 		buffer[buffer[1]+2] = '\0';
@@ -1033,7 +1011,7 @@ void colon(uint16_t count)
 				bool quitting = w[1] == 'q';
 				if (arg)
 					set_current_filename(arg);
-				if (!cpm_fcb.f[0])
+				if (!file_exists)
 					print_no_filename();
 				else if (save_file())
 				{
@@ -1047,12 +1025,12 @@ void colon(uint16_t count)
 			{
 				if (arg)
 				{
-					FCB backupfcb;
-
-					memcpy(&backupfcb, &cpm_fcb, sizeof(FCB));
-					cpm_parse_filename(&cpm_fcb, arg);
-					insert_file();
-					memcpy(&cpm_fcb, &backupfcb, sizeof(FCB));
+//					FCB backupfcb;
+//
+//					memcpy(&backupfcb, &cpm_fcb, sizeof(FCB));
+//                    file_arg = arg;
+//					insert_file();
+//					memcpy(&cpm_fcb, &backupfcb, sizeof(FCB));
 				}
 				else
 					print_no_filename();
@@ -1080,7 +1058,7 @@ void colon(uint16_t count)
 				else
 				{
 					new_file();
-					cpm_fcb.f[0] = 0; /* no filename */
+					file_exists = 0; /* no filename */
 				}
 				break;
 			}
@@ -1095,7 +1073,7 @@ void colon(uint16_t count)
 			}
 
 			default:
-				cpm_printstring0("Unknown command\r\n");
+				con_puts("Unknown command\r\n");
 		}
 	}
 
@@ -1109,6 +1087,7 @@ void colon(uint16_t count)
 /* ======================================================================= */
 
 unsigned char orig_mmu6, orig_mmu7;
+uint8_t top_page, btm_page;
 
 void main(int argc, const char* argv[])
 {
@@ -1125,75 +1104,78 @@ void main(int argc, const char* argv[])
 
 	con_clear();
 
-	buffer_start = cpm_ram;
-	buffer_end = cpm_ramtop-1;
+    ZXN_WRITE_MMU6(_z_page_table[btm_page]);
+    ZXN_WRITE_MMU7(_z_page_table[top_page]);
+	buffer_start = (void *) 0xC000;
+    buffer_end = (void *) 0xFFFE;
 	*buffer_end = '\n';
-	cpm_ram = buffer_start;
+////	cpm_ram = buffer_start;
 	print_status = set_status_line;
 
 	itoa((uint16_t)(buffer_end - buffer_start), buffer, 10);
 	strcat(buffer, " bytes free");
 	print_status(buffer);
 
-	load_file();
-
-	con_goto(0, 0);
-	render_screen(first_line);
-	bindings = &normal_bindings;
-
-	command_count = 0;
-	for (;;)
-	{
-		const char* cmdp;
-		uint16_t length;
-		unsigned c;
-
-		recompute_screen_position();
-
-		for (;;)
-		{
-			c = con_getc();
-			if (isdigit(c))
-			{
-				command_count = (command_count*10) + (c-'0');
-				itoa(command_count, buffer, 10);
-				strcat(buffer, " repeat");
-				set_status_line(buffer);
-			}
-			else
-			{
-				set_status_line("");
-				break;
-			}
-		}
-			
-		cmdp = strchr(bindings->keys, c);
-		if (cmdp)
-		{
-			command_t* cmd = bindings->callbacks[cmdp - bindings->keys];
-			uint16_t count = command_count;
-			if (count == 0)
-			{
-				if (cmd == goto_line)
-					count = UINT_MAX;
-				else
-					count = 1;
-			}
-			command_count = 0;
-
-			bindings = &normal_bindings;
-			set_status_line("");
-			cmd(count);
-			if (bindings->name)
-				set_status_line(bindings->name);
-		}
-		else
-		{
-			set_status_line("Unknown key");
-			bindings = &normal_bindings;
-			command_count = 0;
-		}
-	}
+//	load_file();
+//
+//	con_goto(0, 0);
+//	render_screen(first_line);
+//	bindings = &normal_bindings;
+//
+//	command_count = 0;
+//	for (;;)
+//	{
+//		const char* cmdp;
+//		uint16_t length;
+//		unsigned c;
+//
+//		recompute_screen_position();
+//
+//		for (;;)
+//		{
+//			c = con_getc();
+//			if (isdigit(c))
+//			{
+//				command_count = (command_count*10) + (c-'0');
+//				itoa(command_count, buffer, 10);
+//				strcat(buffer, " repeat");
+//				set_status_line(buffer);
+//			}
+//			else
+//			{
+//				set_status_line("");
+//				break;
+//			}
+//		}
+//
+//		cmdp = strchr(bindings->keys, c);
+//		if (cmdp)
+//		{
+//			command_t* cmd = bindings->callbacks[cmdp - bindings->keys];
+//			uint16_t count = command_count;
+//			if (count == 0)
+//			{
+//				if (cmd == goto_line)
+//					count = UINT_MAX;
+//				else
+//					count = 1;
+//			}
+//			command_count = 0;
+//
+//			bindings = &normal_bindings;
+//			set_status_line("");
+//			cmd(count);
+//			if (bindings->name)
+//				set_status_line(bindings->name);
+//		}
+//		else
+//		{
+//			set_status_line("Unknown key");
+//			bindings = &normal_bindings;
+//			command_count = 0;
+//		}
+//	}
+    exit(0);
 }
 
 void at_exit() {

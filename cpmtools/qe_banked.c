@@ -1,9 +1,29 @@
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <stdbool.h>
+#include <string.h>
+#include <sys/types.h>
+#include <fcntl.h>
+#include <ctype.h>
+#include <limits.h>
+
+#include <z80.h>
+#include <arch/zxn.h>
+#include <arch/zx/esxdos.h>
+#include <arch/zxn/esxdos.h>
+#include <errno.h>
+
+#include "esxcuss/textmode.h"
+
 unsigned char orig_cpu_speed;
 
 /* move these to a NextZXOS allocated memory bank, later */
 static unsigned char bankedShadowTilemap[sizeof(tilemap)];
 static unsigned char bankedShadowTiles[sizeof(tiles)];
+
+extern uint8_t top_page, btm_page, file_handle;
 
 uint8_t tilemap_background[16] = {
         0xE3,0x01,     // Transparent
@@ -23,13 +43,13 @@ uint8_t tilemap_foreground[32] = {            // 0xE3 = 277
 };
 
 void bankedTextmodeBackup() {
-    memcpy(shadowTiles,   tiles, sizeof(tiles));
-    memcpy(shadowTilemap,   tilemap, sizeof(tilemap));
+    memcpy(bankedShadowTiles,   tiles, sizeof(tiles));
+    memcpy(bankedShadowTilemap,   tilemap, sizeof(tilemap));
 }
 
 void bankedTextmodeRestore() {
-    memcpy(tiles, shadowTiles, sizeof(tiles));
-    memcpy(tilemap, shadowTilemap, sizeof(tilemap));
+    memcpy(tiles, bankedShadowTiles, sizeof(tiles));
+    memcpy(tilemap, bankedShadowTilemap, sizeof(tilemap));
 }
 
 void banked_init() {
@@ -42,16 +62,20 @@ void banked_init() {
     // Ensure we clean up as we shut down...
     atexit(at_exit);
 
-    // Back up Tilemap area
-    bankedTextmodeBackup();
+    // Get 16k of scratch RAM for text editing
+    top_page = esx_ide_bank_alloc(0);
+    btm_page = esx_ide_bank_alloc(0);
 
     // Load Cinema.ch8 font, taken from https://damieng.com/typography/zx-origins/cinema
-    target_address = &fontmanInit;
 
+    errno = 0;
+    file_handle = esxdos_f_open("Cinema.ch8", ESXDOS_MODE_R | ESXDOS_MODE_OE);
+//    // vis.chars(32+) at 0x5D00
+    esxdos_f_read(file_handle, 0x5D00, 768);
+    esxdos_f_close(file_handle);
 
-    // We're going to trash this area for the VM Terminal UI, so let's back it up so we can restore it
-    initTilemapBackup();
-    initTilesBackup();
+    // We're going to trash this area for the Editor canvas, so let's back it up so we can restore it
+    bankedTextmodeBackup();
 
         // 0x6E (110) R/W =>  Tilemap Base Address
     //  bits 7-6 = Read back as zero, write values ignored
@@ -93,19 +117,17 @@ void banked_init() {
 
 void banked_exit() {
     // Files
-    esxdos_f_close(file_in);
-    esxdos_f_close(file_out);
+    esxdos_f_close(file_handle);
 
     // Free buffers
+    esx_ide_bank_free(top_page, 0);
+    esx_ide_bank_free(btm_page, 0);
 
     // disable textmode
     ZXN_NEXTREG(0x6b, 0);                                    // disable tilemap in 40x32 mode, 1bit palette
 
-     // Restore Textmode UI memory
-    initTilemapRestore();
-
     // Restore Textmode tiles
-    initTilesRestore();
+    bankedTextmodeRestore();
 
     // Finally, restore the original CPU speed
     ZXN_NEXTREGA(REG_TURBO_MODE, orig_cpu_speed);

@@ -36,3 +36,5 @@ extern void con_revoff(void);
 #define LIBCUSS_KEY_DOWN "\012"
 #define LIBCUSS_KEY_UP "\013"
 #define LIBCUSS_KEY_RIGHT "\014"
+
+#endif // #LIBCUSS_H
