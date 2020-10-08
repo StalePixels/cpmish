@@ -858,7 +858,7 @@ void enter_change_mode(uint16_t count)
 
 const char normal_keys[] =
 	LIBCUSS_KEY_LEFT LIBCUSS_KEY_DOWN LIBCUSS_KEY_UP LIBCUSS_KEY_RIGHT
-	"^$hjklbwiAGxJOorR:\022dZc";
+	"^$hjklbwiAGx" 12 "JOorR:\022dZc";
 
 command_t* const normal_cbs[] =
 {
@@ -878,7 +878,8 @@ command_t* const normal_cbs[] =
 	append_text,	
 	goto_line,	
 	delete_right,	
-	join,      
+	delete_right,
+	join,
 	open_above, 
 	open_below,  
 	replace_char, 
