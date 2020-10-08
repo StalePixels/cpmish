@@ -14,8 +14,12 @@
 #include <arch/zx/esxdos.h>
 #include <arch/zxn/esxdos.h>
 #include <errno.h>
+#include <input.h>
+#include <compress/zx7.h>
 
 #include "esxcuss/textmode.h"
+
+extern void at_exit();
 
 unsigned char orig_cpu_speed;
 
@@ -23,7 +27,7 @@ unsigned char orig_cpu_speed;
 static unsigned char bankedShadowTilemap[sizeof(tilemap)];
 static unsigned char bankedShadowTiles[sizeof(tiles)];
 
-extern uint8_t top_page, btm_page, file_handle;
+extern uint8_t orig_mmu6, orig_mmu7, top_page, btm_page, file_handle;
 
 uint8_t tilemap_background[16] = {
         0xE3,0x01,     // Transparent
@@ -66,21 +70,19 @@ void banked_init() {
     top_page = esx_ide_bank_alloc(0);
     btm_page = esx_ide_bank_alloc(0);
 
-    // Load Cinema.ch8 font, taken from https://damieng.com/typography/zx-origins/cinema
-
-    errno = 0;
-    file_handle = esxdos_f_open("Cinema.ch8", ESXDOS_MODE_R | ESXDOS_MODE_OE);
-//    // vis.chars(32+) at 0x5D00
-    esxdos_f_read(file_handle, 0x5D00, 768);
-    esxdos_f_close(file_handle);
+    printf("BASIC Top %d Bottom %d\n", orig_mmu7, orig_mmu6);
+    printf("MyNew Top %d Bottom %d\n", top_page, btm_page);
 
     // We're going to trash this area for the Editor canvas, so let's back it up so we can restore it
     bankedTextmodeBackup();
 
-        // 0x6E (110) R/W =>  Tilemap Base Address
+    // Load Cinema.ch8 font, taken from https://damieng.com/typography/zx-origins/cinema
+    dzx7_standard(((unsigned int *)font), ((unsigned char *)0x5D00));
+
+    // 0x6E (110) R/W =>  Tilemap Base Address
     //  bits 7-6 = Read back as zero, write values ignored
     //  bits 5-0 = MSB of address of the tilemap in Bank 5
-    ZXN_NEXTREG(0x6e, 0x6C);                                    // tilemap base address is 0x6c00
+    ZXN_NEXTREG(0x6e, 0x6C);                                    // tilemap base address is 0x6C00
 
     // 0x6F (111) R/W => Tile Definitions Base Address
     //  bits 7-6 = Read back as zero, write values ignored
@@ -116,12 +118,15 @@ void banked_init() {
 }
 
 void banked_exit() {
+    while(in_inkey()!=0){};
+    while(in_inkey()==0){};
+    zx_border(INK_GREEN);
     // Files
     esxdos_f_close(file_handle);
 
     // Free buffers
-    esx_ide_bank_free(top_page, 0);
-    esx_ide_bank_free(btm_page, 0);
+    esx_ide_bank_free(0, top_page);
+    esx_ide_bank_free(0, btm_page);
 
     // disable textmode
     ZXN_NEXTREG(0x6b, 0);                                    // disable tilemap in 40x32 mode, 1bit palette
@@ -131,4 +136,6 @@ void banked_exit() {
 
     // Finally, restore the original CPU speed
     ZXN_NEXTREGA(REG_TURBO_MODE, orig_cpu_speed);
+
+    // WAIT
 }

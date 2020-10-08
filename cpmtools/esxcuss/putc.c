@@ -18,6 +18,7 @@ void con_putc(uint16_t c)
     }
 
     tilemap[screeny][screenx].tile = c;
+    tilemap[screeny][screenx].flags = 2;
     screenx++;
     if (screenx == SCREENWIDTH)
     {

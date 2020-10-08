@@ -23,9 +23,10 @@ extern void con_revon(void);
 extern void con_revoff(void);
 
 #define SCREENWIDTH 80
-#define SCREENHEIGHT 24
+#define SCREENHEIGHT 32
 #define LIBCUSS_ANSI
 
+// OCTAL BATSHITTERY AHEAD!
 #define LIBCUSS_CLEAR "\033[2J"
 #define LIBCUSS_CLEAREOL "\033[K"
 #define LIBCUSS_NEWLINE "\r\n"
@@ -35,6 +36,7 @@ extern void con_revoff(void);
 #define LIBCUSS_KEY_LEFT "\010"
 #define LIBCUSS_KEY_DOWN "\012"
 #define LIBCUSS_KEY_UP "\013"
-#define LIBCUSS_KEY_RIGHT "\014"
+//#define LIBCUSS_KEY_RIGHT "\014"
+#define LIBCUSS_KEY_RIGHT "\011"
 
 #endif // #LIBCUSS_H

@@ -23,4 +23,6 @@ struct __tiles
 
 extern struct __tiles tiles[256];   //
 
+extern unsigned char font[];
+
 #endif //CPMISH_TEXTMODE_H
