@@ -15,8 +15,10 @@ void con_clear_to_eol(void)
     if ((i != 0) && (screeny == (SCREENHEIGHT-1)))
         i--;
 
-    while (i--)
+    while (i--) {
         tilemap[screeny][screenx].tile = ' ';
+        tilemap[screeny][screenx].flags = 2;
+    }
 
     con_goto(screenx, screeny);
 

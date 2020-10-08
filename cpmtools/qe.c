@@ -477,130 +477,132 @@ void quit(void)
 
 void cursor_home(uint16_t count)
 {
-//	while (gap_start != current_line)
-//		*--gap_end = *--gap_start;
+	while (gap_start != current_line)
+		*--gap_end = *--gap_start;
 }
 
 void cursor_end(uint16_t count)
 {
-//	while ((gap_end != buffer_end) && (gap_end[0] != '\n'))
-//		*gap_start++ = *gap_end++;
+	while ((gap_end != buffer_end) && (gap_end[0] != '\n'))
+		*gap_start++ = *gap_end++;
 }
 
 void cursor_left(uint16_t count)
 {
 	while (count--)
 	{
-		if ((gap_start != buffer_start) && (gap_start[-1] != '\n'))
-			*--gap_end = *--gap_start;
+		if ((gap_start != buffer_start) && (gap_start[-1] != '\n')) {
+		    *--gap_end = *--gap_start;
+            tilemap[screeny][screenx].flags = 2;
+		}
 	}
 }
 
 void cursor_right(uint16_t count)
 {
-//	while (count--)
-//	{
-//		if ((gap_end != buffer_end) && (gap_end[0] != '\n'))
-//			*gap_start++ = *gap_end++;
-//	}
+	while (count--)
+	{
+		if ((gap_end != buffer_end) && (gap_end[0] != '\n'))
+			*gap_start++ = *gap_end++;
+	}
 }
 
 void cursor_down(uint16_t count)
 {
-//	while (count--)
-//	{
-//		uint16_t offset = gap_start - current_line;
-//		cursor_end(1);
-//		if (gap_end == buffer_end)
-//			return;
-//
-//		*gap_start++ = *gap_end++;
-//		current_line = gap_start;
-//		cursor_right(offset);
-//	}
+	while (count--)
+	{
+		uint16_t offset = gap_start - current_line;
+		cursor_end(1);
+		if (gap_end == buffer_end)
+			return;
+
+		*gap_start++ = *gap_end++;
+		current_line = gap_start;
+		cursor_right(offset);
+	}
 }
 
 void cursor_up(uint16_t count)
 {
-//	while (count--)
-//	{
-//		uint16_t offset = gap_start - current_line;
-//
-//		cursor_home(1);
-//		if (gap_start == buffer_start)
-//			return;
-//
-//		do
-//			*--gap_end = *--gap_start;
-//		while ((gap_start != buffer_start) && (gap_start[-1] != '\n'));
-//
-//		current_line = gap_start;
-//		cursor_right(offset);
-//	}
+	while (count--)
+	{
+		uint16_t offset = gap_start - current_line;
+
+		cursor_home(1);
+		if (gap_start == buffer_start)
+			return;
+
+		do
+			*--gap_end = *--gap_start;
+		while ((gap_start != buffer_start) && (gap_start[-1] != '\n'));
+
+		current_line = gap_start;
+		cursor_right(offset);
+	}
 }
 
 bool word_boundary(uint16_t left, uint16_t right)
 {
-//	if (!isalnum(left) && isalnum(right))
-//		return 1;
-//	if (isspace(left) && !isspace(right))
-//		return 1;
-//	return 0;
+	if (!isalnum(left) && isalnum(right))
+		return 1;
+	if (isspace(left) && !isspace(right))
+		return 1;
+	return 0;
 }
 
 void cursor_wordleft(uint16_t count)
 {
-//	while (count--)
-//	{
-//		bool linechanged = false;
-//
-//		while (gap_start != buffer_start)
-//		{
-//			uint16_t right = *--gap_start = *--gap_end;
-//			uint16_t left = gap_start[-1];
-//			if (right == '\n')
-//				linechanged = true;
-//
-//			if (word_boundary(left, right))
-//				break;
-//		}
-//
-//		if (linechanged)
-//		{
-//			current_line = gap_start;
-//			while ((current_line != buffer_start) && (current_line[-1] != '\n'))
-//				current_line--;
-//		}
-//	}
+	while (count--)
+	{
+		bool linechanged = false;
+
+		while (gap_start != buffer_start)
+		{
+			uint16_t right = *--gap_start = *--gap_end;
+			uint16_t left = gap_start[-1];
+			if (right == '\n')
+				linechanged = true;
+
+			if (word_boundary(left, right))
+				break;
+		}
+
+		if (linechanged)
+		{
+			current_line = gap_start;
+			while ((current_line != buffer_start) && (current_line[-1] != '\n'))
+				current_line--;
+		}
+	}
 }
 
 void cursor_wordright(uint16_t count)
 {
-//	while (count--)
-//	{
-//		while (gap_end != buffer_end)
-//		{
-//			uint16_t left = *gap_start++ = *gap_end++;
-//			uint16_t right = *gap_end;
-//			if (left == '\n')
-//				current_line = gap_start;
-//
-//			if (word_boundary(left, right))
-//				break;
-//		}
-//	}
+	while (count--)
+	{
+		while (gap_end != buffer_end)
+		{
+			uint16_t left = *gap_start++ = *gap_end++;
+			uint16_t right = *gap_end;
+			if (left == '\n')
+				current_line = gap_start;
+
+			if (word_boundary(left, right))
+				break;
+		}
+	}
 }
 
 void insert_newline(void)
 {
-//	if (gap_start != gap_end)
-//	{
-//		*gap_start++ = '\n';
-//		con_goto(0, current_line_y);
-//		current_line = draw_line(current_line);
-//		current_line_y = screeny;
-//		display_height[current_line_y] = 0;
-//	}
+	if (gap_start != gap_end)
+	{
+		*gap_start++ = '\n';
+		con_goto(0, current_line_y);
+		current_line = draw_line(current_line);
+		current_line_y = screeny;
+		display_height[current_line_y] = 0;
+	}
 }
 
 void insert_mode(bool replacing)
@@ -1014,7 +1016,7 @@ void colon(uint16_t count)
 //
 //					memcpy(&backupfcb, &file_name, sizeof(FCB));
 //                    file_name = arg;
-//					insert_file();
+					insert_file();
 //					memcpy(&file_name, &backupfcb, sizeof(FCB));
 				}
 				else

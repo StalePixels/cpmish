@@ -3,21 +3,53 @@
  * See COPYING.cpmish in the distribution root directory for more information.
  */
 
+#include <z80.h>
+#include <arch/zxn.h>
+#include <intrinsic.h>
+#include <arch/zxn/esxdos.h>
+#include <errno.h>
+
 #include <input.h>
 #include "libcuss.h"
+#include "textmode.h"
 
 static uint8_t last_key = 0;
 static uint8_t next_key = 0;
+
+#define FRAME_FLASH             27
+static uint8_t cursor_frame_counter =    FRAME_FLASH;
+
+
+#define WAIT_FOR_SCANLINE(line)         while (ZXN_READ_REG(REG_ACTIVE_VIDEO_LINE_L) == line); \
+                                        while (ZXN_READ_REG(REG_ACTIVE_VIDEO_LINE_L) != line)
+
+void con_cursor() {
+    cursor_frame_counter--;
+    WAIT_FOR_SCANLINE(239);
+    if(cursor_frame_counter==0) {
+        tilemap[screeny][screenx].flags = tilemap[screeny][screenx].flags + 128;
+        cursor_frame_counter = FRAME_FLASH;
+    }
+}
+
+int8_t chrcmpi(unsigned char a, unsigned char b) {
+    if((a>64 && a<91)) a=a+32;
+    if((b>64 && b<91)) b=b+32;
+    return a==b;
+}
+
 uint8_t con_getc(void)
 {
     // Stop holding the previous key
-    while(next_key==last_key) {
+    while(chrcmpi(next_key, last_key)) {
         next_key = in_inkey();
+        con_cursor();
     }
 
     // Now wait for a new key
     while(!next_key) {
         next_key = in_inkey();
+        con_cursor();
     }
 
     // Remember they key so we don't repeat it
