@@ -10,7 +10,7 @@ void con_clear_to_eol(void)
     if (screeny >= SCREENHEIGHT)
             return;
 
-    uint16_t i = SCREENWIDTH - screenx;
+    uint16_t i = SCREENWIDTH - screenx - 1;
     if ((i != 0) && (screeny == (SCREENHEIGHT-1)))
         i--;
 

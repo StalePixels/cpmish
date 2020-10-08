@@ -172,7 +172,7 @@ uint8_t* draw_line(uint8_t* startp)
 		if (inp == buffer_end)
 		{
 			if (xo == 0)
-				con_puts("~...");
+				con_puts("~");
 			con_clear_to_eol();
 			con_newline();
 			break;
@@ -613,11 +613,11 @@ void insert_mode(bool replacing)
 		uint8_t* nextp;
 		uint16_t length;
 		uint16_t c = con_getc();
-		if (c == 7)             // EDIT
+		if (c == 0x07)             // EDIT
 			break;
 
 		dirty = true;
-		if (c == 8)
+		if (c == 0x0C)             // DELETE (technically backspace)
 		{
 			if (gap_start != current_line)
 				gap_start--;
