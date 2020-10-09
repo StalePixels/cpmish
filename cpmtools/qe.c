@@ -343,11 +343,10 @@ void insert_file(void)
 error:
     strcpy(buffer, "Could not read file ");
     strcat(buffer, file_name);
-    strcat(buffer, " (errno ");
+    strcat(buffer, " (errno:");
     itoa(errno, buffer+strlen(buffer), 10);
     strcat(buffer, ")");
 	print_status(buffer);
-//	exit(errno);
 done:
 	esxdos_f_close(file_name);
 	dirty = true;

@@ -116,7 +116,7 @@ void banked_init() {
 }
 
 void banked_exit() {
-    zx_border(INK_GREEN);
+    zx_cls(INK_BLACK);
     // Files
     esxdos_f_close(file_handle);
 
