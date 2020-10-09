@@ -3,6 +3,7 @@
  * See COPYING.cpmish in the distribution root directory for more information.
  */
 
+#include <stdio.h>
 #include "libcuss.h"
 #include "textmode.h"
 
@@ -16,11 +17,9 @@ void con_clear_to_eol(void)
         i--;
 
     while (i--) {
-        tilemap[screeny][screenx].tile = ' ';
-//        tilemap[screeny][screenx].flags = TEXTMODE_DEFAULT_COLOUR;
+        tilemap[screeny][SCREENWIDTH-i-1].tile = ' ';
     }
 
     con_goto(screenx, screeny);
-
 }
 

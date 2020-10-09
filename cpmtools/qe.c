@@ -70,6 +70,7 @@ extern const struct bindings zed_bindings;
 extern const struct bindings change_bindings;
 
 char buffer[128];// ((char*)cpm_default_dma)
+#define cpm_default_dma     (uint8_t*)buffer
 
 extern void colon(uint16_t count);
 extern void goto_line(uint16_t lineno);
@@ -93,6 +94,8 @@ void set_status_line(const char* message)
 {
 	uint16_t length = 0;
 
+	uint8_t oldx = screenx, oldy = screeny;
+
 	goto_status_line();
 	con_revon();
 	for (;;)
@@ -110,7 +113,7 @@ void set_status_line(const char* message)
 		length++;
 	}
 	status_line_length = length;
-	con_goto(screenx, screeny);
+	con_goto(oldx, oldy);
 }
 
 /* ======================================================================= */
@@ -285,7 +288,7 @@ void recompute_screen_position(void)
 void redraw_current_line(void)
 {
 	uint8_t* nextp;
-	uint16_t oldheight;
+    uint8_t oldheight;
 
 	oldheight = display_height[current_line_y];
 	con_goto(0, current_line_y);
@@ -300,7 +303,6 @@ void redraw_current_line(void)
 /*                                LIFECYCLE                                */
 /* ======================================================================= */
 
-
 void insert_file(void)
 {
 	strcpy(buffer, "Reading ");
@@ -309,40 +311,43 @@ void insert_file(void)
 
     errno = 0;
     file_handle = esxdos_f_open(file_name, ESXDOS_MODE_R);
-    if(errno) goto error;
+    if(errno)
+        goto error;
 
-//	for (;;)
-//	{
-//		uint8_t* inptr;
-//
-//		int i = cpm_read_sequential(&file_name);
-//		if (i == 1) /* EOF */
+    for (;;)
+	{
+		uint8_t* inptr;
+
+        uint8_t i = esxdos_f_read(file_handle, cpm_default_dma, 128);
+		if (i == 0) /* EOF */
 			goto done;
-//		if (i != 0)
-//			goto error;
-//
-//		inptr = cpm_default_dma;
-//		while (inptr != (cpm_default_dma+128))
-//		{
-//			uint8_t c = *inptr++;
-//			if (c == 26) /* EOF */
-//				break;
-//			if (c != '\r')
-//			{
-//				if (gap_start == gap_end)
-//				{
-//					print_status("Out of memory");
-//					goto done;
-//				}
-//				*gap_start++ = c;
-//			}
-//		}
-//	}
+        if(errno)
+			goto error;
+
+		inptr = cpm_default_dma;
+		while (inptr != (cpm_default_dma+i))
+		{
+			uint8_t c = *inptr++;
+			if (c != '\r')
+			{
+				if (gap_start == gap_end)
+				{
+					print_status("Out of memory");
+					goto done;
+				}
+				*gap_start++ = c;
+			}
+		}
+	}
 
 error:
     strcpy(buffer, "Could not read file ");
     strcat(buffer, file_name);
+    strcat(buffer, " (errno ");
+    itoa(errno, buffer+strlen(buffer), 10);
+    strcat(buffer, ")");
 	print_status(buffer);
+//	exit(errno);
 done:
 	esxdos_f_close(file_name);
 	dirty = true;
@@ -467,7 +472,7 @@ bool save_file(void)
 void quit(void)
 {
     con_clear();
-	con_puts("\032Goodbye!\r\n");
+	con_puts("Goodbye!");
 	exit(0);
 }
 
@@ -859,7 +864,7 @@ void enter_change_mode(uint16_t count)
 
 const char normal_keys[] =
 	LIBCUSS_KEY_LEFT LIBCUSS_KEY_DOWN LIBCUSS_KEY_UP LIBCUSS_KEY_RIGHT
-	"^$hjklbwiAGx\x0CJOorR:\022dZc";
+	"^$hjklbwiAGxJOorR:\022dZc";
 
 command_t* const normal_cbs[] =
 {
@@ -877,8 +882,7 @@ command_t* const normal_cbs[] =
 	cursor_wordright,
 	insert_text,
 	append_text,	
-	goto_line,	
-	delete_right,
+	goto_line,
 	delete_right,
 	join,
 	open_above, 
@@ -889,7 +893,7 @@ command_t* const normal_cbs[] =
 	redraw_screen,	
 	enter_delete_mode,
 	enter_zed_mode,
-	enter_change_mode,
+	enter_change_mode
 };
 
 const struct bindings normal_bindings =
@@ -946,6 +950,15 @@ const struct bindings zed_bindings =
 /*                             COLON COMMANDS                              */
 /* ======================================================================= */
 
+void print_colon_status(const char* s)
+{
+    uint8_t oldx = screenx, oldy = screeny;
+    screeny = HEIGHT - 1; screenx = 0;
+    con_clear_to_eol();
+    con_puts(s);
+    screenx = oldx; screeny = oldy;
+}
+
 void set_current_filename(const char* f)
 {
 	file_name = f;
@@ -954,49 +967,61 @@ void set_current_filename(const char* f)
 
 void print_no_filename(void)
 {
-	con_puts("No filename set\r\n");
-}
+    print_colon_status("No filename set");
+}//Next
 
 void print_document_not_saved(void)
 {
-    con_puts("Document not saved (use ! to confirm)\r\n");
-}
-
-void print_colon_status(const char* s)
-{
-	con_puts(s);
-	con_newline();
+    print_colon_status("Document not saved (use ! to confirm)");
 }
 
 void colon(uint16_t count)
 {
+    char c;
+
 	print_status = print_colon_status;
 
 	for (;;)
 	{
-		char* w;
+	    memset(buffer, 0, 128);
+		char* w = buffer;
 		char* arg;
 
 		goto_status_line();
+        con_clear_to_eol();
 		con_putc(':');
-		buffer[0] = 126;
-		buffer[1] = 0;
-//		cpm_readline((uint8_t*) buffer);
-        con_newline();
 
-		buffer[buffer[1]+2] = '\0';
+		for(;;) {
+            c = con_getc();
+            if(c==0x0D)                         // enter
+                break;
 
-		w = strtok(buffer+2, " ");
-		if (!w)
+            if(c==0x0C && screenx>1) {          // backspace
+                *w = 0;
+                --screenx;
+                con_putc(' ');
+                --screenx;
+                --w;
+            }
+            else if(c>31) {
+                con_putc(c);
+                *w = c;
+                w++;
+            }
+        }
+
+        w = buffer;
+		if (!*w)
 			break;
-		arg = strtok(NULL, " ");
+
 		switch (*w)
 		{
+
 			case 'w':
 			{
 				bool quitting = w[1] == 'q';
-				if (arg)
-					set_current_filename(arg);
+//				if (arg)
+//					set_current_filename(arg);
 				if (!file_name)
 					print_no_filename();
 				else if (save_file())
@@ -1006,7 +1031,7 @@ void colon(uint16_t count)
 				}
 				break;
 			}
-
+/*
 			case 'r':
 			{
 				if (arg)
@@ -1044,11 +1069,11 @@ void colon(uint16_t count)
 				else
 				{
 					new_file();
-					file_name = 0; /* no filename */
+					file_name = 0; // no filename
 				}
 				break;
 			}
-
+*/
 			case 'q':
 			{
 				if (!dirty || (w[1] == '!'))
@@ -1059,7 +1084,7 @@ void colon(uint16_t count)
 			}
 
 			default:
-				con_puts("Unknown command\r\n");
+                print_status("Unknown command");
 		}
 	}
 
@@ -1138,7 +1163,7 @@ void main(int argc, const char* argv[])
 		cmdp = strchr(bindings->keys, c);
 		if (cmdp)
 		{
-            printf("\x16%c%c(%x, %d) ", 1,1, cmdp, cmdp - bindings->keys);
+//            printf("\x16%c%c(%x, %d) ", 1,1, cmdp, cmdp - bindings->keys);
 			command_t* cmd = bindings->callbacks[cmdp - bindings->keys];
 			uint16_t count = command_count;
 			if (count == 0)
@@ -1159,12 +1184,11 @@ void main(int argc, const char* argv[])
 		else
 		{
 			set_status_line("Unknown key");
-            printf("\x16%c%c(%d!) ", 1,1, c);
+//            printf("\x16%c%c(%d!) ", 1,1, c);
 			bindings = &normal_bindings;
 			command_count = 0;
 		}
 	}
-
     exit(0);
 }
 
