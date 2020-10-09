@@ -1144,6 +1144,7 @@ void main(int argc, const char* argv[])
 
 		for (;;)
 		{
+
 			c = con_getc();
             if (isdigit(c))
             {
@@ -1159,10 +1160,10 @@ void main(int argc, const char* argv[])
             }
 		}
 
+//        printf("\x16%c%cBs:%x Be:%x Gs:%x Ge:%x ", 1,1, buffer_start, buffer_end, gap_start, gap_end);
 		cmdp = strchr(bindings->keys, c);
 		if (cmdp)
 		{
-//            printf("\x16%c%c(%x, %d) ", 1,1, cmdp, cmdp - bindings->keys);
 			command_t* cmd = bindings->callbacks[cmdp - bindings->keys];
 			uint16_t count = command_count;
 			if (count == 0)
