@@ -17,7 +17,7 @@ void con_clear_to_eol(void)
 
     while (i--) {
         tilemap[screeny][screenx].tile = ' ';
-        tilemap[screeny][screenx].flags = 2;
+//        tilemap[screeny][screenx].flags = TEXTMODE_DEFAULT_COLOUR;
     }
 
     con_goto(screenx, screeny);

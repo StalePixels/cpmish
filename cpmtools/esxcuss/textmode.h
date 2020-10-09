@@ -8,6 +8,7 @@
 #define TEXTMODE_ULA_BEHIND             0x00
 #define TEXTMODE_ULA_FRONT              0x01
 
+#define TEXTMODE_DEFAULT_COLOUR         4
 struct __tilemap
 {
     unsigned char tile;

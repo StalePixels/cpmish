@@ -493,7 +493,6 @@ void cursor_left(uint16_t count)
 	{
 		if ((gap_start != buffer_start) && (gap_start[-1] != '\n')) {
 		    *--gap_end = *--gap_start;
-            tilemap[screeny][screenx].flags = 2;
 		}
 	}
 }

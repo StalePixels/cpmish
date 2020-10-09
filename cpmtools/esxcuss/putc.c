@@ -18,7 +18,7 @@ void con_putc(uint16_t c)
     }
 
     tilemap[screeny][screenx].tile = c;
-    tilemap[screeny][screenx].flags = 2;
+    tilemap[screeny][screenx].flags = TEXTMODE_DEFAULT_COLOUR;
     screenx++;
     if (screenx == SCREENWIDTH)
     {
