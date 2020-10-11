@@ -1053,6 +1053,7 @@ void colon(uint16_t count)
 					print_no_filename();
 				break;
 			}
+*/
 
 			case 'e':
 			{
@@ -1067,7 +1068,6 @@ void colon(uint16_t count)
 				}
 				break;
 			}
-*/
 			case 'n':
 			{
 				if (dirty && (w[1] != '!')) {
