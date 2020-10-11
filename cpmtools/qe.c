@@ -368,6 +368,7 @@ bool really_save_file(char* fcb)
 //	const uint8_t* inp;
 //	uint8_t* outp;
 //	static uint16_t pushed;
+    errno = 0;
 //
 //	strcpy(buffer, "Writing ");
 //  strcpy(buffer+strlen(buffer), file_name);
@@ -413,11 +414,12 @@ bool really_save_file(char* fcb)
 //	}
 //
 //	dirty = false;
+    return true;
 //	return cpm_close_file(fcb) != 0xff;
 //
 //error:
 //	cpm_close_file(fcb);
-	return false;
+//	return false;
 }
 
 bool save_file(void)
@@ -427,11 +429,11 @@ bool save_file(void)
 //	if (cpm_open_file(&file_name) == 0xff)
 //	{
 //		/* The file does not exist. */
-//		if (really_save_file(&file_name))
-//		{
-//			dirty = false;
-//			return true;
-//		}
+		if (really_save_file(&file_name))
+		{
+			dirty = false;
+			return true;
+		}
 //		else
 //		{
 //			print_status("Failed to save file");
@@ -441,7 +443,7 @@ bool save_file(void)
 //
 //	/* Write to a temporary file. */
 //
-//	strcpy((char*)tempfcb.f, "QETEMP  $$$");
+//	strcpy((char*)tempfcb.f, "QETEMP.$$$");
 //	tempfcb.dr = file_name.dr;
 //	if (really_save_file(&tempfcb) == 0xff)
 //		goto tempfile;
@@ -459,12 +461,12 @@ bool save_file(void)
 //		goto commit;
 //	return true;
 //
-//tempfile:
-//	print_status("Cannot create QETEMP.$$$ file (it may exist)");
-//	return false;
-//
-//commit:
-//	print_status("Cannot commit file; your data may be in QETEMP.$$$");
+tempfile:
+	print_status("Cannot create QETEMP.$$$ file (it may exist)");
+	return false;
+
+commit:
+	print_status("Cannot commit file; your data may be in QETEMP.$$$");
 	return false;
 }
 
@@ -845,8 +847,8 @@ void redraw_screen(uint16_t count)
 
 void enter_delete_mode(uint16_t count)
 {
-//	bindings = &delete_bindings;
-//	command_count = count;
+	bindings = &delete_bindings;
+	command_count = count;
 }
 
 void enter_zed_mode(uint16_t count)
@@ -951,6 +953,10 @@ const struct bindings zed_bindings =
 
 void print_colon_status(const char* s)
 {
+
+    ZXN_NEXTREG(REG_TURBO_MODE, 0);
+    printf("\x07");
+    ZXN_NEXTREG(REG_TURBO_MODE, 3);
     uint8_t oldx = screenx, oldy = screeny;
     screeny = HEIGHT - 1; screenx = 0;
     con_clear_to_eol();
@@ -960,14 +966,16 @@ void print_colon_status(const char* s)
 
 void set_current_filename(const char* f)
 {
-	file_name = f;
+    free(file_name);
+    file_name = malloc(strlen(f)+1);
+    strcpy(file_name, f);
 	dirty = true;
 }
 
 void print_no_filename(void)
 {
     print_colon_status("No filename set");
-}//Next
+}
 
 void print_document_not_saved(void)
 {
@@ -980,12 +988,11 @@ void colon(uint16_t count)
 
 	print_status = print_colon_status;
 
-	for (;;)
+//	for (;;)
 	{
 	    memset(buffer, 0, 128);
 		char* w = buffer;
-		char* arg;
-
+		char* arg = 0;
 		goto_status_line();
         con_clear_to_eol();
 		con_putc(':');
@@ -1009,18 +1016,18 @@ void colon(uint16_t count)
             }
         }
 
-        w = buffer;
+        w = strtok(buffer, " ");
 		if (!*w)
-			break;
-
+			goto cleanup;
+        arg = strtok(NULL, " ");
 		switch (*w)
 		{
 
 			case 'w':
 			{
-				bool quitting = w[1] == 'q';
-//				if (arg)
-//					set_current_filename(arg);
+				bool quitting = (w[1] == 'q');
+				if (arg)
+					set_current_filename(arg);
 				if (!file_name)
 					print_no_filename();
 				else if (save_file())
@@ -1060,19 +1067,18 @@ void colon(uint16_t count)
 				}
 				break;
 			}
-
+*/
 			case 'n':
 			{
-				if (dirty && (w[1] != '!'))
-					print_document_not_saved();
-				else
-				{
+				if (dirty && (w[1] != '!')) {
+                    print_document_not_saved();
+                }
+				else {
 					new_file();
 					file_name = 0; // no filename
 				}
 				break;
 			}
-*/
 			case 'q':
 			{
 				if (!dirty || (w[1] == '!'))
@@ -1086,6 +1092,7 @@ void colon(uint16_t count)
                 print_status("Unknown command");
 		}
 	}
+    cleanup:
 
 	con_clear();
 	print_status = set_status_line;
@@ -1184,7 +1191,7 @@ void main(int argc, const char* argv[])
 		else
 		{
 			set_status_line("Unknown key");
-//            printf("\x16%c%c(%d!) ", 1,1, c);
+            printf("\x16%c%c?%d? ", 1,1, c);
 			bindings = &normal_bindings;
 			command_count = 0;
 		}

@@ -8,8 +8,8 @@ RELEASE_DIR ?= ./RELEASE-$(NAME)
 INSTALL_BASE ?= /Volumes/devnext
 INSTALL_DIR ?= $(INSTALL_BASE)/$(NAME)
 
-#Z88DK_CRT = 1
-Z88DK_CRT = 31
+Z88DK_CRT = 1
+#Z88DK_CRT = 31
 
 #DEBUGFLAGS := --list --c-code-in-asm
 DEBUGFLAGS =
@@ -48,6 +48,9 @@ deps: NAME
 dirs:
 	$(MKDIR) $(BUILD_DIR)
 	$(MKDIR) $(TMP_DIR)
+
+Cinema:
+	zx7
 
 
 bank_47:
