@@ -1122,8 +1122,8 @@ void help() {
     con_puts("NextZXOS port D. Rimron-Soutter, Stale Pixels");
     screenx = 26; screeny = 17;
     con_puts("Version 10h - Build 20021012");
-    screenx = 15; screeny = 19;
-    con_puts("Here by accident type? Hold CAPS SHIFT and press ZZ");
+    screenx = 17; screeny = 19;
+    con_puts("Here by accident? Hold CAPS SHIFT and press ZZ");
 
 }
 
