@@ -55,7 +55,7 @@ uint8_t con_getc(void)
     // Remember they key so we don't repeat it
     last_key = next_key;
 
-    tilemap[screeny][screenx].flags = tilemap[screeny][screenx].flags = TEXTMODE_DEFAULT_COLOUR;
+    tilemap[screeny][screenx].flags = tilemap[screeny][screenx].flags = screencolour;
 	return next_key;
 }
 

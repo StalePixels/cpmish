@@ -4,9 +4,11 @@
  */
 
 #include "libcuss.h"
+#include "textmode.h"
 
 void con_revoff(void)
 {
+    screencolour = TEXTMODE_DEFAULT_COLOUR;
 	#if defined LIBCUSS_REVOFF
 		cpm_printstring0(LIBCUSS_REVOFF);
 	#endif

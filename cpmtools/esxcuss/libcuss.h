@@ -11,6 +11,7 @@
 
 extern uint16_t screenx;
 extern uint16_t screeny;
+extern uint16_t screencolour;
 
 extern void con_goto(uint16_t x, uint16_t y);
 extern void con_clear(void);

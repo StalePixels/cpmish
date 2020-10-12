@@ -302,12 +302,13 @@ void redraw_current_line(void)
 /* ======================================================================= */
 /*                                LIFECYCLE                                */
 /* ======================================================================= */
-
 void insert_file(void)
 {
-	strcpy(buffer, "Reading ");
-    strcat(buffer, file_name);
-	print_status(buffer);
+    char* insert_buffer = malloc(128);
+
+	strcpy(insert_buffer, "Reading ");
+    strcat(insert_buffer, file_name);
+	print_status(insert_buffer);
 
     errno = 0;
     file_handle = esxdos_f_open(file_name, ESXDOS_MODE_R);
@@ -341,15 +342,16 @@ void insert_file(void)
 	}
 
 error:
-    strcpy(buffer, "Could not read file ");
-    strcat(buffer, file_name);
-    strcat(buffer, " (errno:");
-    itoa(errno, buffer+strlen(buffer), 10);
-    strcat(buffer, ")");
-	print_status(buffer);
+    strcpy(insert_buffer, "Could not read file ");
+    strcat(insert_buffer, file_name);
+    strcat(insert_buffer, " (errno:");
+    itoa(errno, insert_buffer+strlen(insert_buffer), 10);
+    strcat(insert_buffer, ")");
+	print_status(insert_buffer);
 done:
 	esxdos_f_close(file_name);
 	dirty = true;
+	free(insert_buffer);
 	return;
 }
 
@@ -365,109 +367,124 @@ void load_file(void)
 
 bool really_save_file(char* fcb)
 {
-//	const uint8_t* inp;
-//	uint8_t* outp;
-//	static uint16_t pushed;
+	const uint8_t* inp;
+	uint8_t* outp;
+	static uint16_t pushed;
+    char* save_buffer = malloc(128);
+
+	strcpy(save_buffer, "Writing ");
+    strcpy(save_buffer+strlen(save_buffer), fcb);
+	print_status(save_buffer);
+	free(save_buffer);
+
     errno = 0;
-//
-//	strcpy(buffer, "Writing ");
-//  strcpy(buffer+strlen(buffer), file_name);
-//	print_status(buffer);
-//
-//	if (cpm_make_file(fcb) == 0xff)
-//		return false;
-//	fcb->cr = 0;
-//
-//	inp = buffer_start;
-//	outp = cpm_default_dma;
-//	pushed = 0;
-//	while ((inp != buffer_end) || (outp != cpm_default_dma) || pushed)
-//	{
-//		static uint16_t c;
-//
-//		if (pushed)
-//		{
-//			c = pushed;
-//			pushed = 0;
-//		}
-//		else
-//		{
-//			if (inp == gap_start)
-//				inp = gap_end;
-//			c = (inp != buffer_end) ? *inp++ : 26;
-//
+    file_handle = esxdos_f_open(fcb, ESXDOS_MODE_W | ESXDOS_MODE_CT);
+	if (errno)
+		return false;
+
+	inp = buffer_start;
+	outp = cpm_default_dma;
+	pushed = 0;
+	while ((inp != buffer_end) || (outp != cpm_default_dma) || pushed)
+	{
+		static uint16_t c;
+
+		if (pushed)
+		{
+			c = pushed;
+			pushed = 0;
+		}
+		else
+		{
+			if (inp == gap_start)
+				inp = gap_end;
+			c = (inp != buffer_end) ? *inp++ : 26;
+
 //			if (c == '\n')
 //			{
 //				pushed = '\n';
 //				c = '\r';
 //			}
-//		}
-//
-//		*outp++ = c;
-//
-//		if (outp == (cpm_default_dma+128))
-//		{
-//			if (cpm_write_sequential(fcb) == 0xff)
-//				goto error;
-//			outp = cpm_default_dma;
-//		}
-//	}
-//
-//	dirty = false;
-    return true;
-//	return cpm_close_file(fcb) != 0xff;
-//
-//error:
-//	cpm_close_file(fcb);
-//	return false;
+		}
+
+		*outp++ = c;
+
+		if (outp == (cpm_default_dma+128))
+		{
+            esxdos_f_write(file_handle, cpm_default_dma, 128);
+            if(errno)
+				goto error;
+			outp = cpm_default_dma;
+		}
+		// special case to get around CPMs 128b block
+		if ((inp == buffer_end) && !pushed && (outp != cpm_default_dma)) {
+            esxdos_f_write(file_handle, cpm_default_dma, outp - cpm_default_dma);
+            if(errno)
+                goto error;
+            outp = cpm_default_dma;
+		}
+	}
+
+	dirty = false;
+	esxdos_f_close(file_handle);
+	return true;
+
+error:
+    esxdos_f_close(file_handle);
+	return false;
 }
 
 bool save_file(void)
 {
-//	static FCB tempfcb;
+//    const char tempfcb[] = "QETEMP.$$$";
 //
-//	if (cpm_open_file(&file_name) == 0xff)
-//	{
+//    errno = 0;
+//    file_handle = esxdos_f_open(file_name, ESX_MODE_OPEN_CREAT_NOEXIST);
+//    if(errno == ESX_EEXIST)
+//        goto file_exists;
+
+//	if (!errno) {
 //		/* The file does not exist. */
-		if (really_save_file(&file_name))
-		{
-			dirty = false;
-			return true;
-		}
-//		else
-//		{
-//			print_status("Failed to save file");
-//			return false;
-//		}
-//	}
-//
+        if (really_save_file(file_name)) {
+            dirty = false;
+            return true;
+        }
+//    }
+
+    print_status("Failed to save file");
+    return false;
+
+//file_exists:
 //	/* Write to a temporary file. */
 //
-//	strcpy((char*)tempfcb.f, "QETEMP.$$$");
-//	tempfcb.dr = file_name.dr;
-//	if (really_save_file(&tempfcb) == 0xff)
+//	if (really_save_file(tempfcb) == false)
 //		goto tempfile;
 //
-//	strcpy(buffer, "Renaming ");
-//  strcat(buffer, tempfcb);
-//	strcat(buffer, " to ");
-//  strcat(buffer, file_name)
-//	print_status(buffer);
+//    char* save_buffer = malloc(128);
+//    strcpy(save_buffer, "Renaming ");
+//    strcat(save_buffer, tempfcb);
+//  	strcat(save_buffer, " to ");
+//    strcat(save_buffer, file_name);
+//    print_status(save_buffer);
+//    free(save_buffer);
 //
-//	if (cpm_delete_file(&file_name) == 0xff)
+//    errno = 0;
+//	esxdos_f_unlink(file_name);
+//    if (errno)
+//        goto commit;
+//    esx_f_rename(tempfcb, file_name);
+//	if (errno)
 //		goto commit;
-//	memcpy(((uint8_t*) &tempfcb) + 16, &file_name, 16);
-//	if (cpm_rename_file((RCB*) &tempfcb) == 0xff)
-//		goto commit;
+//
 //	return true;
 //
-tempfile:
-	print_status("Cannot create QETEMP.$$$ file (it may exist)");
-	return false;
-
-commit:
-	print_status("Cannot commit file; your data may be in QETEMP.$$$");
-	return false;
+//tempfile:
+//	print_status("Cannot create QETEMP.$$$ file (it may exist)");
+//	return false;
+//
+//commit:
+//	print_status("Cannot commit file; your data may be in QETEMP.$$$");
+//	return false;
 }
 
 void quit(void)
@@ -953,7 +970,6 @@ const struct bindings zed_bindings =
 
 void print_colon_status(const char* s)
 {
-
     ZXN_NEXTREG(REG_TURBO_MODE, 0);
     printf("\x07");
     ZXN_NEXTREG(REG_TURBO_MODE, 3);
@@ -966,6 +982,7 @@ void print_colon_status(const char* s)
 
 void set_current_filename(const char* f)
 {
+    printf("Setting filename to %s.", f);
     free(file_name);
     file_name = malloc(strlen(f)+1);
     strcpy(file_name, f);
@@ -1037,24 +1054,22 @@ void colon(uint16_t count)
 				}
 				break;
 			}
-/*
+
 			case 'r':
 			{
 				if (arg)
 				{
-//					FCB backupfcb;
-//
-//					memcpy(&backupfcb, &file_name, sizeof(FCB));
-//                    file_name = arg;
+					char *backupfcb = malloc(sizeof(file_name));
+					memcpy(&backupfcb, &file_name, sizeof(backupfcb));
+                    file_name = arg;
 					insert_file();
-//					memcpy(&file_name, &backupfcb, sizeof(FCB));
+					memcpy(&file_name, &backupfcb, sizeof(backupfcb));
+					free(backupfcb);
 				}
 				else
 					print_no_filename();
 				break;
 			}
-*/
-
 			case 'e':
 			{
 				if (!arg)
@@ -1075,7 +1090,7 @@ void colon(uint16_t count)
                 }
 				else {
 					new_file();
-					file_name = 0; // no filename
+					file_name = 0;
 				}
 				break;
 			}
@@ -1106,11 +1121,15 @@ void colon(uint16_t count)
 void main(int argc, const char* argv[])
 {
     intrinsic_di();
-    // Store original paging configuration
+    /*
+     * Store original paging configuration
+     */
     orig_mmu6 = ZXN_READ_REG(REG_MMU0 + 6);
     orig_mmu7 = ZXN_READ_REG(REG_MMU0 + 7);
 
-    // Initalise the system
+    /*
+     * Initalise the hardware
+     */
     ZXN_WRITE_MMU6(_z_page_table[PAGE_INIT0]);
     ZXN_WRITE_MMU7(_z_page_table[PAGE_INIT1]);
 
@@ -1130,8 +1149,9 @@ void main(int argc, const char* argv[])
 	strcat(buffer, " bytes free");
 	print_status(buffer);
 
-	if(argc) {
-        file_name = argv[1];
+	if(argc>1) {
+	    file_name = malloc(strlen(argv[1])+1);
+	    strcpy(file_name, argv[1]);
 	}
 
 	load_file();
@@ -1167,7 +1187,6 @@ void main(int argc, const char* argv[])
             }
 		}
 
-//        printf("\x16%c%cBs:%x Be:%x Gs:%x Ge:%x ", 1,1, buffer_start, buffer_end, gap_start, gap_end);
 		cmdp = strchr(bindings->keys, c);
 		if (cmdp)
 		{
@@ -1191,7 +1210,6 @@ void main(int argc, const char* argv[])
 		else
 		{
 			set_status_line("Unknown key");
-            printf("\x16%c%c?%d? ", 1,1, c);
 			bindings = &normal_bindings;
 			command_count = 0;
 		}
@@ -1200,13 +1218,17 @@ void main(int argc, const char* argv[])
 }
 
 void at_exit() {
-    // Shutdown gracefully
+    /*
+     * Shutdown gracefully
+     */
     ZXN_WRITE_MMU6(_z_page_table[PAGE_INIT0]);
     ZXN_WRITE_MMU7(_z_page_table[PAGE_INIT1]);
 
     banked_exit();
 
-    // Restore original paging configuration
+    /*
+     * Restore original paging configuration
+     */
     ZXN_WRITE_MMU6(orig_mmu6);
     ZXN_WRITE_MMU7(orig_mmu7);
     intrinsic_ei();

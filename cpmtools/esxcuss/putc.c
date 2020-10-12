@@ -6,6 +6,8 @@
 #include "libcuss.h"
 #include "textmode.h"
 
+uint16_t screencolour = TEXTMODE_DEFAULT_COLOUR;
+
 void con_putc(uint16_t c)
 {
     if (screeny >= SCREENHEIGHT)
@@ -18,7 +20,7 @@ void con_putc(uint16_t c)
     }
 
     tilemap[screeny][screenx].tile = c;
-    tilemap[screeny][screenx].flags = TEXTMODE_DEFAULT_COLOUR;
+    tilemap[screeny][screenx].flags = screencolour;
     screenx++;
     if (screenx == SCREENWIDTH)
     {

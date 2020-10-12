@@ -4,9 +4,11 @@
  */
 
 #include "libcuss.h"
+#include "textmode.h"
 
 void con_revon(void)
 {
+    screencolour = TEXTMODE_REVERSE_COLOUR;
 	#if defined LIBCUSS_REVON
 		cpm_printstring0(LIBCUSS_REVON);
 	#endif
