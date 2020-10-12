@@ -35,7 +35,7 @@ extern unsigned char _z_page_table[];
 
 uint8_t top_page, btm_page, orig_mmu6, orig_mmu7, file_handle;
 
-const char* file_name;
+const char* file_name = 0;
 
 uint16_t screenx = 0, screeny = 0;
 uint16_t status_line_length;
@@ -349,7 +349,7 @@ error:
     strcat(insert_buffer, ")");
 	print_status(insert_buffer);
 done:
-	esxdos_f_close(file_name);
+	esxdos_f_close(file_handle);
 	dirty = true;
 	free(insert_buffer);
 	return;
@@ -365,7 +365,7 @@ void load_file(void)
 	goto_line(1);
 }
 
-bool really_save_file(char* fcb)
+bool really_save_file(char* fcb[])
 {
 	const uint8_t* inp;
 	uint8_t* outp;
@@ -373,7 +373,7 @@ bool really_save_file(char* fcb)
     char* save_buffer = malloc(128);
 
 	strcpy(save_buffer, "Writing ");
-    strcpy(save_buffer+strlen(save_buffer), fcb);
+    strcat(save_buffer, fcb);
 	print_status(save_buffer);
 	free(save_buffer);
 
@@ -436,55 +436,55 @@ error:
 
 bool save_file(void)
 {
-//    const char tempfcb[] = "QETEMP.$$$";
-//
-//    errno = 0;
-//    file_handle = esxdos_f_open(file_name, ESX_MODE_OPEN_CREAT_NOEXIST);
-//    if(errno == ESX_EEXIST)
-//        goto file_exists;
+    const char tempfcb[] = "QETEMP.$$$";
 
-//	if (!errno) {
-//		/* The file does not exist. */
+    errno = 0;
+    file_handle = esxdos_f_open(file_name, ESX_MODE_OPEN_CREAT_NOEXIST);
+    if(errno == ESX_EEXIST)
+        goto file_exists;
+
+	if (!errno) {
+		/* The file does not exist. */
         if (really_save_file(file_name)) {
             dirty = false;
             return true;
         }
-//    }
+    }
 
     print_status("Failed to save file");
     return false;
 
-//file_exists:
-//	/* Write to a temporary file. */
-//
-//	if (really_save_file(tempfcb) == false)
-//		goto tempfile;
-//
-//    char* save_buffer = malloc(128);
-//    strcpy(save_buffer, "Renaming ");
-//    strcat(save_buffer, tempfcb);
-//  	strcat(save_buffer, " to ");
-//    strcat(save_buffer, file_name);
-//    print_status(save_buffer);
-//    free(save_buffer);
-//
-//    errno = 0;
-//	esxdos_f_unlink(file_name);
-//    if (errno)
-//        goto commit;
-//    esx_f_rename(tempfcb, file_name);
-//	if (errno)
-//		goto commit;
-//
-//	return true;
-//
-//tempfile:
-//	print_status("Cannot create QETEMP.$$$ file (it may exist)");
-//	return false;
-//
-//commit:
-//	print_status("Cannot commit file; your data may be in QETEMP.$$$");
-//	return false;
+file_exists:
+	/* Write to a temporary file. */
+
+	if (really_save_file(tempfcb) == false)
+		goto tempfile;
+
+    char* save_buffer = malloc(128);
+    strcpy(save_buffer, "Renaming ");
+    strcat(save_buffer, tempfcb);
+  	strcat(save_buffer, " to ");
+    strcat(save_buffer, file_name);
+    print_status(save_buffer);
+    free(save_buffer);
+
+    errno = 0;
+	esxdos_f_unlink(file_name);
+    if (errno)
+        goto commit;
+    esx_f_rename(tempfcb, file_name);
+	if (errno)
+		goto commit;
+
+	return true;
+
+tempfile:
+	print_status("Cannot create QETEMP.$$$ file (it may exist)");
+	return false;
+
+commit:
+	print_status("Cannot commit file; your data may be in QETEMP.$$$");
+	return false;
 }
 
 void quit(void)
@@ -982,7 +982,6 @@ void print_colon_status(const char* s)
 
 void set_current_filename(const char* f)
 {
-    printf("Setting filename to %s.", f);
     free(file_name);
     file_name = malloc(strlen(f)+1);
     strcpy(file_name, f);
@@ -1114,6 +1113,20 @@ void colon(uint16_t count)
 	render_screen(first_line);
 }
 
+void help() {
+    uint16_t oldx = screenx;
+    uint16_t oldy = screeny;
+    screenx = 14; screeny = 14;
+    con_puts("QE, a VI adjacent, by David Given, part of his CPMISH");
+    screenx = 18; screeny = 15;
+    con_puts("NextZXOS port D. Rimron-Soutter, Stale Pixels");
+    screenx = 26; screeny = 17;
+    con_puts("Version 10h - Build 20021012");
+    screenx = 15; screeny = 19;
+    con_puts("Here by accident type? Hold CAPS SHIFT and press ZZ");
+
+}
+
 /* ======================================================================= */
 /*                            EDITOR OPERATIONS                            */
 /* ======================================================================= */
@@ -1155,10 +1168,14 @@ void main(int argc, const char* argv[])
 	}
 
 	load_file();
-
 	con_goto(0, 0);
 	render_screen(first_line);
 	bindings = &normal_bindings;
+
+
+    if(!file_name) {
+        help();
+    }
 
 	command_count = 0;
 	for (;;)
