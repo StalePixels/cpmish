@@ -1150,8 +1150,8 @@ void main(int argc, const char* argv[])
 
 	con_clear();
 
-    ZXN_WRITE_MMU6(_z_page_table[btm_page]);
-    ZXN_WRITE_MMU7(_z_page_table[top_page]);
+    ZXN_WRITE_MMU6(btm_page);
+    ZXN_WRITE_MMU7(top_page);
 
 	buffer_start = (void *) 0xC000;
     buffer_end = (void *) 0xFFFE;
