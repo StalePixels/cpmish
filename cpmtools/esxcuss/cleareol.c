@@ -5,7 +5,6 @@
 
 #include <stdio.h>
 #include "libcuss.h"
-#include "textmode.h"
 
 void con_clear_to_eol(void)
 {

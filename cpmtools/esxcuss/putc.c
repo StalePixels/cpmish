@@ -4,7 +4,6 @@
  */
 
 #include "libcuss.h"
-#include "textmode.h"
 
 uint16_t screencolour = TEXTMODE_DEFAULT_COLOUR;
 

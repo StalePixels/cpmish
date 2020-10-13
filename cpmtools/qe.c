@@ -70,10 +70,25 @@ extern const struct bindings zed_bindings;
 extern const struct bindings change_bindings;
 
 char buffer[128];// ((char*)cpm_default_dma)
+char message_buffer[128];
 #define cpm_default_dma     (uint8_t*)buffer
 
 extern void colon(uint16_t count);
 extern void goto_line(uint16_t lineno);
+
+
+/* ======================================================================= */
+/*                                 BANKED CODE                             */
+/* ======================================================================= */
+void banked(void *fn) {
+    ZXN_WRITE_MMU6(_z_page_table[PAGE_INIT0]);
+    ZXN_WRITE_MMU7(_z_page_table[PAGE_INIT1]);
+
+    fn();
+
+    ZXN_WRITE_MMU6(_z_page_table[btm_page]);
+    ZXN_WRITE_MMU7(_z_page_table[top_page]);
+}
 
 /* ======================================================================= */
 /*                                SCREEN DRAWING                           */
@@ -304,11 +319,9 @@ void redraw_current_line(void)
 /* ======================================================================= */
 void insert_file(void)
 {
-    char* insert_buffer = malloc(128);
-
-	strcpy(insert_buffer, "Reading ");
-    strcat(insert_buffer, file_name);
-	print_status(insert_buffer);
+	strcpy(message_buffer, "Reading ");
+    strcat(message_buffer, file_name);
+	print_status(message_buffer);
 
     errno = 0;
     file_handle = esxdos_f_open(file_name, ESXDOS_MODE_R);
@@ -342,16 +355,15 @@ void insert_file(void)
 	}
 
 error:
-    strcpy(insert_buffer, "Could not read file ");
-    strcat(insert_buffer, file_name);
-    strcat(insert_buffer, " (errno:");
-    itoa(errno, insert_buffer+strlen(insert_buffer), 10);
-    strcat(insert_buffer, ")");
-	print_status(insert_buffer);
+    strcpy(message_buffer, "Could not read file ");
+    strcat(message_buffer, file_name);
+    strcat(message_buffer, " (errno:");
+    itoa(errno, message_buffer+strlen(message_buffer), 10);
+    strcat(message_buffer, ")");
+	print_status(message_buffer);
 done:
 	esxdos_f_close(file_handle);
 	dirty = true;
-	free(insert_buffer);
 	return;
 }
 
@@ -365,22 +377,26 @@ void load_file(void)
 	goto_line(1);
 }
 
-bool really_save_file(char* fcb[])
+bool really_save_file(const char* fcb)
 {
-	const uint8_t* inp;
+    const uint8_t* inp;
 	uint8_t* outp;
 	static uint16_t pushed;
-    char* save_buffer = malloc(128);
 
-	strcpy(save_buffer, "Writing ");
-    strcat(save_buffer, fcb);
-	print_status(save_buffer);
-	free(save_buffer);
+	strcpy(message_buffer, "Writing ");
+    strcat(message_buffer, fcb);
+	print_status(message_buffer);
 
     errno = 0;
     file_handle = esxdos_f_open(fcb, ESXDOS_MODE_W | ESXDOS_MODE_CT);
-	if (errno)
-		return false;
+	if (errno) {
+        strcpy(message_buffer, "Failed to create file (errno:");
+        itoa(errno, message_buffer + strlen(message_buffer), 10);
+        strcat(message_buffer, ")");
+        print_status(message_buffer);
+        banked(banked_beep);
+        return false;
+    }
 
 	inp = buffer_start;
 	outp = cpm_default_dma;
@@ -398,7 +414,7 @@ bool really_save_file(char* fcb[])
 		{
 			if (inp == gap_start)
 				inp = gap_end;
-			c = (inp != buffer_end) ? *inp++ : 26;
+			c = (inp != buffer_end) ? *inp++ : 0;
 
 //			if (c == '\n')
 //			{
@@ -411,14 +427,15 @@ bool really_save_file(char* fcb[])
 
 		if (outp == (cpm_default_dma+128))
 		{
-            esxdos_f_write(file_handle, cpm_default_dma, 128);
+            esx_f_write(file_handle, cpm_default_dma, 128);
             if(errno)
 				goto error;
 			outp = cpm_default_dma;
 		}
+
 		// special case to get around CPMs 128b block
 		if ((inp == buffer_end) && !pushed && (outp != cpm_default_dma)) {
-            esxdos_f_write(file_handle, cpm_default_dma, outp - cpm_default_dma);
+            esx_f_write(file_handle, cpm_default_dma, outp - cpm_default_dma);
             if(errno)
                 goto error;
             outp = cpm_default_dma;
@@ -443,6 +460,7 @@ bool save_file(void)
     if(errno == ESX_EEXIST)
         goto file_exists;
 
+    esxdos_f_close(file_handle);
 	if (!errno) {
 		/* The file does not exist. */
         if (really_save_file(file_name)) {
@@ -451,22 +469,26 @@ bool save_file(void)
         }
     }
 
-    print_status("Failed to save file");
+    strcpy(message_buffer, "Failed to save file (errno:");
+    itoa(errno, message_buffer+strlen(message_buffer), 10);
+    strcat(message_buffer, ")");
+    print_status(message_buffer);
+    banked(banked_beep);
+
     return false;
 
 file_exists:
 	/* Write to a temporary file. */
 
+	esxdos_f_close(file_handle);
 	if (really_save_file(tempfcb) == false)
 		goto tempfile;
 
-    char* save_buffer = malloc(128);
-    strcpy(save_buffer, "Renaming ");
-    strcat(save_buffer, tempfcb);
-  	strcat(save_buffer, " to ");
-    strcat(save_buffer, file_name);
-    print_status(save_buffer);
-    free(save_buffer);
+    strcpy(message_buffer, "Renaming ");
+    strcat(message_buffer, tempfcb);
+  	strcat(message_buffer, " to ");
+    strcat(message_buffer, file_name);
+    print_status(message_buffer);
 
     errno = 0;
 	esxdos_f_unlink(file_name);
@@ -479,11 +501,19 @@ file_exists:
 	return true;
 
 tempfile:
-	print_status("Cannot create QETEMP.$$$ file (it may exist)");
+    strcpy(message_buffer, "Cannot create QETEMP.$$$ file - it may exist (errno:");
+    itoa(errno, message_buffer+strlen(message_buffer), 10);
+    strcat(message_buffer, ")");
+    print_status(message_buffer);
+    banked(banked_beep);
 	return false;
 
 commit:
-	print_status("Cannot commit file; your data may be in QETEMP.$$$");
+    strcpy(message_buffer, "Cannot commit file; your data may be in QETEMP.$$$ (errno:");
+    itoa(errno, message_buffer+strlen(message_buffer), 10);
+    strcat(message_buffer, ")");
+    print_status(message_buffer);
+    banked(banked_beep);
 	return false;
 }
 
@@ -970,9 +1000,6 @@ const struct bindings zed_bindings =
 
 void print_colon_status(const char* s)
 {
-    ZXN_NEXTREG(REG_TURBO_MODE, 0);
-    printf("\x07");
-    ZXN_NEXTREG(REG_TURBO_MODE, 3);
     uint8_t oldx = screenx, oldy = screeny;
     screeny = HEIGHT - 1; screenx = 0;
     con_clear_to_eol();
@@ -1113,21 +1140,6 @@ void colon(uint16_t count)
 	render_screen(first_line);
 }
 
-void help() {
-    uint16_t oldx = screenx;
-    uint16_t oldy = screeny;
-    screenx = 14; screeny = 14;
-    con_puts("QE, a VI adjacent, by David Given, part of his CPMISH");
-    screenx = 18; screeny = 15;
-    con_puts("NextZXOS port D. Rimron-Soutter, Stale Pixels");
-    screenx = 26; screeny = 17;
-    con_puts("Version 10h - Build 20201012");
-    screenx = 17; screeny = 19;
-    con_puts("Here by accident? Hold CAPS SHIFT and press ZZ");
-    screenx = oldx; screeny = oldy;
-
-}
-
 /* ======================================================================= */
 /*                            EDITOR OPERATIONS                            */
 /* ======================================================================= */
@@ -1144,15 +1156,9 @@ void main(int argc, const char* argv[])
     /*
      * Initalise the hardware
      */
-    ZXN_WRITE_MMU6(_z_page_table[PAGE_INIT0]);
-    ZXN_WRITE_MMU7(_z_page_table[PAGE_INIT1]);
+    banked(banked_init);
 
-    banked_init();
-
-	con_clear();
-
-    ZXN_WRITE_MMU6(btm_page);
-    ZXN_WRITE_MMU7(top_page);
+    con_clear();
 
 	buffer_start = (void *) 0xC000;
     buffer_end = (void *) 0xFFFE;
@@ -1175,7 +1181,7 @@ void main(int argc, const char* argv[])
 
 
     if(!file_name) {
-        help();
+        banked(banked_help);
     }
 
 	command_count = 0;
@@ -1239,10 +1245,7 @@ void at_exit() {
     /*
      * Shutdown gracefully
      */
-    ZXN_WRITE_MMU6(_z_page_table[PAGE_INIT0]);
-    ZXN_WRITE_MMU7(_z_page_table[PAGE_INIT1]);
-
-    banked_exit();
+    banked(banked_exit);
 
     /*
      * Restore original paging configuration

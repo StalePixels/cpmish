@@ -8,6 +8,8 @@
 #define LIBCUSS_H
 
 #include <stdint.h>
+#include "../qe_banked.h"
+#include "textmode.h"
 
 extern uint16_t screenx;
 extern uint16_t screeny;

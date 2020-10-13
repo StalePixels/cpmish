@@ -11,17 +11,12 @@
 
 #include <input.h>
 #include "libcuss.h"
-#include "textmode.h"
 
 static uint8_t last_key = 0;
 static uint8_t next_key = 0;
 
 #define FRAME_FLASH             27
 static uint8_t cursor_frame_counter =    FRAME_FLASH;
-
-
-#define WAIT_FOR_SCANLINE(line)         while (ZXN_READ_REG(REG_ACTIVE_VIDEO_LINE_L) == line); \
-                                        while (ZXN_READ_REG(REG_ACTIVE_VIDEO_LINE_L) != line)
 
 void con_cursor() {
     cursor_frame_counter--;

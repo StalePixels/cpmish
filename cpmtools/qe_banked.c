@@ -17,6 +17,8 @@
 #include <input.h>
 #include <compress/zx7.h>
 
+#include "qe_banked.h"
+#include "esxcuss/libcuss.h"
 #include "esxcuss/textmode.h"
 
 extern void at_exit();
@@ -113,6 +115,33 @@ void banked_init() {
 
     zx_cls(PAPER_MAGENTA|BRIGHT);
 
+}
+
+void banked_help() {
+    uint16_t oldx = screenx;
+    uint16_t oldy = screeny;
+    screenx = 14;   screeny = 13;
+    con_puts("QE, a VI adjacent, by David Given, part of his CPMISH");
+    screenx = 18;   screeny = 14;
+    con_puts(    "NextZXOS port D. Rimron-Soutter, Stale Pixels");
+    screenx = 27;   screeny = 15;
+    con_puts(            "Cinema font by Damien Guard");
+    screenx = 26;   screeny = 17;
+    con_puts(            "Version 10h2 - Build 20201013");
+    screenx = 17;   screeny = 19;
+    con_puts(   "Here by accident?  Hold CAPS SHIFT and press ZZ");
+    screenx = oldx; screeny = oldy;
+}
+
+void banked_beep() {
+    zx_border(INK_RED);
+    ZXN_NEXTREG(REG_TURBO_MODE, 0);
+    printf("\x07");
+    ZXN_NEXTREG(REG_TURBO_MODE, 3);
+    for(uint8_t delay = 60; delay;delay--) {
+        WAIT_FOR_SCANLINE(239);
+    }
+    zx_border(INK_BLACK);
 }
 
 void banked_exit() {

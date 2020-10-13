@@ -5,8 +5,6 @@
 
 #include <string.h>
 #include "libcuss.h"
-#include "textmode.h"
-
 void con_clear(void)
 {
     memset(tilemap, 0, sizeof(tilemap));

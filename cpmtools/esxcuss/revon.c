@@ -4,7 +4,6 @@
  */
 
 #include "libcuss.h"
-#include "textmode.h"
 
 void con_revon(void)
 {
