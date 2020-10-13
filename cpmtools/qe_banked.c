@@ -126,8 +126,8 @@ void banked_help() {
     con_puts(    "NextZXOS port D. Rimron-Soutter, Stale Pixels");
     screenx = 27;   screeny = 15;
     con_puts(            "Cinema font by Damien Guard");
-    screenx = 26;   screeny = 17;
-    con_puts(            "Version 10h2 - Build 20201013");
+    screenx = 27;   screeny = 17;
+    con_puts(            "Version 11 - Build 20201013");
     screenx = 17;   screeny = 19;
     con_puts(   "Here by accident?  Hold CAPS SHIFT and press ZZ");
     screenx = oldx; screeny = oldy;
