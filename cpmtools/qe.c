@@ -1124,6 +1124,7 @@ void help() {
     con_puts("Version 10h - Build 20021012");
     screenx = 17; screeny = 19;
     con_puts("Here by accident? Hold CAPS SHIFT and press ZZ");
+    screenx = oldx; screeny = oldy;
 
 }
 
