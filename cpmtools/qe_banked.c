@@ -126,8 +126,8 @@ void banked_help() {
     con_puts(    "NextZXOS port D. Rimron-Soutter, Stale Pixels");
     screenx = 27;   screeny = 15;
     con_puts(            "Cinema font by Damien Guard");
-    screenx = 27;   screeny = 17;
-    con_puts(            "Version 11 - Build 20201013");
+    screenx = 26;   screeny = 17;
+    con_puts(            "Version 11h2 - Build 20201013");
     screenx = 17;   screeny = 19;
     con_puts(   "Here by accident?  Hold CAPS SHIFT and press ZZ");
     screenx = oldx; screeny = oldy;
@@ -145,7 +145,8 @@ void banked_beep() {
 }
 
 void banked_exit() {
-    zx_cls(INK_BLACK);
+    zx_cls(PAPER_WHITE);
+    zx_border(INK_WHITE);
     // Files
     esxdos_f_close(file_handle);
 
@@ -154,7 +155,7 @@ void banked_exit() {
     esx_ide_bank_free(0, btm_page);
 
     // disable textmode
-    ZXN_NEXTREG(0x6b, 0);                                    // disable tilemap in 40x32 mode, 1bit palette
+    ZXN_NEXTREG(0x6b, 0);                                    // disable tilemap
 
     // Restore Textmode tiles
     bankedTextmodeRestore();

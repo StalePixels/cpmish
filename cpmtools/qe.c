@@ -423,7 +423,7 @@ bool really_save_file(const char* fcb)
 //			}
 		}
 
-		*outp++ = c;
+		if(c) *outp++ = c;
 
 		if (outp == (cpm_default_dma+128))
 		{
@@ -435,6 +435,8 @@ bool really_save_file(const char* fcb)
 
 		// special case to get around CPMs 128b block
 		if ((inp == buffer_end) && !pushed && (outp != cpm_default_dma)) {
+		    uint8_t b = outp - cpm_default_dma;
+
             esx_f_write(file_handle, cpm_default_dma, outp - cpm_default_dma);
             if(errno)
                 goto error;
