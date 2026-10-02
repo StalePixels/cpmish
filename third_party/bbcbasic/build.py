@@ -1,7 +1,7 @@
 from third_party.zmac.build import zmac
 from third_party.ld80.build import ld80
 
-VERSIONS = ["ADM3A"]
+VERSIONS = ["ADM3A", "VT52"]
 
 for f in ["cmos", "eval", "exec", "fpp", "main", "ram", "sorry"]:
     zmac(name=f, src=f"./{f}.z80")

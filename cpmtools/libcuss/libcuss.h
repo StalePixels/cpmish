@@ -84,8 +84,10 @@ extern void con_revoff(void);
 	#define LIBCUSS_CLEAR "\033H\033J"
 	#define LIBCUSS_CLEAREOL "\033K"
 	#define LIBCUSS_NEWLINE "\r\n"
-	#define LIBCUSS_REVON "\033p"
-	#define LIBCUSS_REVOFF "\033q"
+	#if !defined LIBCUSS_NO_REVERSE
+		#define LIBCUSS_REVON "\033p"
+		#define LIBCUSS_REVOFF "\033q"
+	#endif
 
     #define LIBCUSS_KEY_LEFT "\010"
     #define LIBCUSS_KEY_DOWN "\012"
