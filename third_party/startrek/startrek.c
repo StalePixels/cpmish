@@ -61,8 +61,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
 #include <time.h>
+#include <setjmp.h>
+#include <cpm.h>
 
 #ifndef FALSE
 #define FALSE        0
@@ -90,6 +91,13 @@
 typedef int bool;
 typedef char line[MAXCOL];
 typedef char string[MAXLEN];
+
+/* Fixed-point numbers: ACK's 8080 code generator has no floating point,
+ * so fractional values are longs in thousandths. */
+
+typedef long fixed;
+
+#define ONE        1000L
 
 /* Function Declarations */
 
@@ -130,7 +138,11 @@ void quadrant_name(void);
 int function_d(int i);
 int function_r(void);
 void mid_str(char *a, char *b, int x, int y);
-int cint(double d);
+int cint(fixed d);
+fixed parse_fixed(char *s);
+char *fixed_str(fixed v, int places);
+long isqrt(long v);
+void input_line(char *s, int iSize);
 void compute_vector(void);
 void sub1(void);
 void sub2(void);
@@ -140,7 +152,7 @@ void closefile(void);
 int getline(char *s);
 void randomize(void);
 int get_rand(int iSpread);
-double rnd(void);
+fixed rnd(void);
 
 /* Global Variables */
 
@@ -182,13 +194,13 @@ int z3;                     /* string_compare return value */
 int z1, z2;                /* Temporary Sector Coordinates */
 int z4, z5;              /* Temporary quadrant coordinates */
 
-double a, c1;                   /* Used by Library Computer */
-double d[9];                                /* Damage Array */
-double d4;         /* Used for computing damage repair time */
-double s1, s2;     /* Current Sector Position of Enterprise */
-double t;                               /* Current Stardate */
-double w1;                                   /* Warp Factor */
-double x, y, x1, x2;            /* Navigational coordinates */
+fixed a, c1;                    /* Used by Library Computer */
+fixed d[9];                                 /* Damage Array */
+fixed d4;          /* Used for computing damage repair time */
+fixed s1, s2;      /* Current Sector Position of Enterprise */
+fixed t;                                /* Current Stardate */
+fixed w1;                                    /* Warp Factor */
+fixed x, y, x1, x2;             /* Navigational coordinates */
 
 char sA[4];                       /* An Object in a Sector */
 char sC[7];                                   /* Condition */
@@ -196,8 +208,16 @@ char sQ[194];                /* Visual Display of Quadrant */
 
 string sG2;                 /* Used to pass string results */
 
+/* Console input line. One buffer for every prompt keeps the stack small:
+ * ACK's CP/M start-up code gives a program 512 bytes of stack. */
+
+string sTemp;
+
 FILE *stream;
 bool bFlag = FALSE;         /* Prevent multiple file opens */
+
+jmp_buf jbGameOver;         /* end_of_game() returns to main() */
+bool bNewGame;              /* Player volunteered for another game */
 
 /* Main Program */
 
@@ -206,7 +226,15 @@ main(void)
 {
   intro();
 
-  new_game();
+  /* Each game ends in end_of_game(), which jumps back here, so every
+   * game starts at the same stack depth. */
+  do
+    {
+      bNewGame = FALSE;
+      if (setjmp(jbGameOver) == 0)
+        new_game();
+    }
+  while (bNewGame);
 
   /* @@@ exit(0);  */ /* causes a warning in C++ */
   return(0);
@@ -215,8 +243,6 @@ main(void)
 void
 intro(void)
 {
-  string sTemp;
-
   printf ("\n\n");
   printf (" *************************************\n");
   printf (" *                                   *\n");
@@ -228,7 +254,7 @@ intro(void)
 
   printf("\nDo you need instructions (y/n): ");
 
-  fgets(sTemp, sizeof(sTemp), stdin);
+  input_line(sTemp, sizeof(sTemp));
 
   if (sTemp[0] == 'y' || sTemp[0] == 'Y')
     showfile("startrek.doc");
@@ -242,15 +268,11 @@ intro(void)
   printf("\n       The USS Enterprise --- NCC - 1701\n\n\n");
 
   randomize();
-
-  t = (get_rand(20) + 20) * 100;
 }
 
 void
 new_game(void)
 {
-  string sTemp;
-
   initialize();
 
   new_quadrant();
@@ -271,7 +293,7 @@ new_game(void)
 
       printf("Command? ");
 
-      fgets(sTemp, sizeof(sTemp), stdin);
+      input_line(sTemp, sizeof(sTemp));
       printf("\n");
 
       if (! strncmp(sTemp, "nav", 3))
@@ -318,24 +340,31 @@ initialize(void)
 
   /* InItialize time */
 
+  t = (fixed)((get_rand(20) + 20) * 100) * ONE;
   /* @@@ t0 = t; */
-  t0 = (int)t;
+  t0 = (int)(t / ONE);
   t9 = 25 + get_rand(10);
 
   /* Initialize Enterprise */
 
   d0 = 0;
+  d1 = 0;
   e = e0;
   p = p0;
   s = 0;
 
+  /* Reset the galaxy totals that the setup below adds to */
+
+  k9 = 0;
+  b9 = 0;
+
   q1 = function_r();
   q2 = function_r();
-  s1 = (double) function_r();
-  s2 = (double) function_r();
+  s1 = (fixed) function_r() * ONE;
+  s2 = (fixed) function_r() * ONE;
 
   for (i = 1; i <= 8; i++)
-    d[i] = 0.0;
+    d[i] = 0;
 
   /* Setup What Exists in Galaxy */
 
@@ -412,14 +441,14 @@ new_quadrant(void)
   b3 = 0;
   s3 = 0;
   g5 = 0; 
-  d4 = (double) get_rand(100) / 100 / 50;
+  d4 = (fixed) get_rand(100) * ONE / 100 / 50;
   z[q1][q2] = g[q1][q2];
 
   if (q1 >= 1 && q1 <= 8 && q2 >= 1 && q2 <= 8)
     {
       quadrant_name();
 
-      if (t0 != t)
+      if ((fixed) t0 * ONE != t)
         printf("Now entering %s quadrant...\n\n", sG2);
       else
         {
@@ -429,9 +458,9 @@ new_quadrant(void)
     }
 
   /* @@@ k3 = g[q1][q2] * .01; */
-  k3 = (int)(g[q1][q2] * .01);
+  k3 = g[q1][q2] / 100;
   /* @@@ b3 = g[q1][q2] * .1 - 10 * k3; */
-  b3 = (int)(g[q1][q2] * .1 - 10 * k3);
+  b3 = g[q1][q2] / 10 - 10 * k3;
   s3 = g[q1][q2] - 100 * k3 - 10 * b3;
 
   if (k3 > 0)
@@ -458,9 +487,9 @@ new_quadrant(void)
 
   strcpy(sA, "<*>");
   /* @@@ z1 = cint(s1); */
-  z1 = (int)s1;
+  z1 = (int)(s1 / ONE);
   /* @@@ z2 = cint(s2); */
-  z2 = (int)s2;
+  z2 = (int)(s2 / ONE);
   insert_in_quadrant();
 
   if (k3 > 0)
@@ -510,65 +539,64 @@ course_control(void)
   register i;
   /* @@@ int c2, c3, q4, q5; */
   int q4, q5;
-  string sTemp;
-  double c1;
+  fixed c1;
   char sX[4] = "8";
 
   printf("Course (0-9): ");
 
-  fgets(sTemp, sizeof(sTemp), stdin);
+  input_line(sTemp, sizeof(sTemp));
 
   printf("\n");
 
-  c1 = atof(sTemp);
- 
-  if (c1 == 9.0)
-    c1 = 1.0;
+  c1 = parse_fixed(sTemp);
 
-  if (c1 < 0 || c1 > 9.0)
+  if (c1 == 9 * ONE)
+    c1 = ONE;
+
+  if (c1 < 0 || c1 > 9 * ONE)
     {
       printf("Lt. Sulu roports:\n");
       printf("  Incorrect course data, sir!\n\n");
       return;
     }
 
-  if (d[1] < 0.0)
+  if (d[1] < 0)
     strcpy(sX, "0.2");
 
   printf("Warp Factor (0-%s): ", sX);
 
-  fgets(sTemp, sizeof(sTemp), stdin);
+  input_line(sTemp, sizeof(sTemp));
 
   printf("\n");
 
-  w1 = atof(sTemp);
+  w1 = parse_fixed(sTemp);
 
-  if (d[1] < 0.0 && w1 > 0.21)
+  if (d[1] < 0 && w1 > 210)
     {
       printf("Warp Engines are damaged. ");
       printf("Maximum speed = Warp 0.2.\n\n");
       return;
     }
 
-  if (w1 <= 0.0)
+  if (w1 <= 0)
     return;
 
-  if (w1 > 8.1)
+  if (w1 > 8100)
     {
       printf("Chief Engineer Scott reports:\n");
-      printf("  The engines won't take warp %4.1f!\n\n", w1);
+      printf("  The engines won't take warp %s!\n\n", fixed_str(w1, 1));
       return;
     }
 
-  n = cint(w1 * 8.0); /* @@@ note: this is a real round in the original basic */
-  
+  n = cint(w1 * 8); /* @@@ note: this is a real round in the original basic */
+
   if (e - n < 0)
     {
       printf("Engineering reports:\n");
       printf("  Insufficient energy available for maneuvering");
-      printf(" at warp %4.1f!\n\n", w1);
+      printf(" at warp %s!\n\n", fixed_str(w1, 1));
 
-      if (s >= n && d[7] >= 0.0)
+      if (s >= n && d[7] >= 0)
         {
           printf("Deflector Control Room acknowledges:\n");
           printf("  %d units of energy presently deployed to shields.\n", s);
@@ -583,9 +611,9 @@ course_control(void)
 
   strcpy(sA, "   ");
   /* @@@ z1 = cint(s1); */
-  z1 = (int)s1;
+  z1 = (int)(s1 / ONE);
   /* @@@ z2 = cint(s2); */
-  z2 = (int)s2;
+  z2 = (int)(s2 / ONE);
   insert_in_quadrant();
 
   /* @@@ c2 = cint(c1); */
@@ -594,8 +622,9 @@ course_control(void)
   /* @@@ x1 = c[0][c2] + (c[0][c3] - c[0][c2]) * (c1 - c2); */
   /* @@@ x2 = c[1][c2] + (c[1][c3] - c[1][c2]) * (c1 - c2); */
 
-  x1 = c[1][(int)c1] + (c[1][(int)c1 + 1] - c[1][(int)c1]) * (c1 - (int)c1);
-  x2 = c[2][(int)c1] + (c[2][(int)c1 + 1] - c[2][(int)c1]) * (c1 - (int)c1);
+  i = (int)(c1 / ONE);
+  x1 = c[1][i] * ONE + (c[1][i + 1] - c[1][i]) * (c1 - i * ONE);
+  x2 = c[2][i] * ONE + (c[2][i + 1] - c[2][i]) * (c1 - i * ONE);
 
   x = s1;
   y = s2;
@@ -608,9 +637,9 @@ course_control(void)
       s2 = s2 + x2;
 
       /* @@@ z1 = cint(s1); */
-      z1 = (int)s1;
+      z1 = (int)(s1 / ONE);
       /* @@@ z2 = cint(s2); */
-      z2 = (int)s2;
+      z2 = (int)(s2 / ONE);
 
       if (z1 < 1 || z1 >= 9 || z2 < 1 || z2 >= 9)
         {
@@ -637,25 +666,25 @@ course_control(void)
 void
 complete_maneuver(void)
 {
-  double t8;
+  fixed t8;
 
   strcpy(sA, "<*>");
   /* @@@ z1 = cint(s1); */
-  z1 = (int)s1;
+  z1 = (int)(s1 / ONE);
   /* @@@ z2 = cint(s2); */
-  z2 = (int)s2;
+  z2 = (int)(s2 / ONE);
   insert_in_quadrant();
 
   maneuver_energy();
 
-  t8 = 1.0;
+  t8 = ONE;
 
-  if (w1 < 1.0)
+  if (w1 < ONE)
     t8 = w1;
 
   t = t + t8;
 
-  if (t > t0 + t9)
+  if (t > (fixed)(t0 + t9) * ONE)
     end_of_time();
 
   short_range_scan();
@@ -667,32 +696,32 @@ exceed_quadrant_limits(void)
   int x5 = 0;   /* Outside galaxy flag */
 
   /* @@@ x = (8 * (q1 - 1)) + x + (n * x1); */
-  x = (8 * q1) + x + (n * x1);
+  x = (fixed)(8 * q1) * ONE + x + (n * x1);
   /* @@@ y = (8 * (q2 - 1)) + y + (n * x2); */
-  y = (8 * q2) + y + (n * x2);
+  y = (fixed)(8 * q2) * ONE + y + (n * x2);
 
   /* @@@ q1 = cint(x / 8.0); */
-  q1 = (int)(x / 8.0);
+  q1 = (int)(x / (8 * ONE));
   /* @@@ q2 = cint(y / 8.0); */
-  q2 = (int)(y / 8.0);
+  q2 = (int)(y / (8 * ONE));
   
   /* @@@ s1 = x - ((q1 - 1) * 8); */
-  s1 = x - (q1 * 8);
+  s1 = x - (fixed)(q1 * 8) * ONE;
   /* @@@ s2 = y - ((q2 - 1) * 8); */
-  s2 = y - (q2 * 8);
+  s2 = y - (fixed)(q2 * 8) * ONE;
 
   /* @@@ if (cint(s1) == 0) */
-  if ((int)s1 == 0)
+  if ((int)(s1 / ONE) == 0)
     {
       q1 = q1 - 1;
-      s1 = s1 + 8.0;
+      s1 = s1 + 8 * ONE;
     }
 
   /* @@@ if (cint(s2) == 0) */
-  if ((int)s2 == 0)
+  if ((int)(s2 / ONE) == 0)
     {
       q2 = q2 - 1;
-      s2 = s2 + 8.0;
+      s2 = s2 + 8 * ONE;
     }
 
   /* check if outside galaxy */
@@ -701,28 +730,28 @@ exceed_quadrant_limits(void)
     {
       x5 = 1;
       q1 = 1;
-      s1 = 1.0;
+      s1 = ONE;
     }
 
   if (q1 > 8)
     {
       x5 = 1;
       q1 = 8;
-      s1 = 8.0;
+      s1 = 8 * ONE;
     }
 
   if (q2 < 1)
     {
       x5 = 1;
       q2 = 1;
-      s2 = 1.0;
+      s2 = ONE;
     }
 
   if (q2 > 8)
     {
       x5 = 1;
       q2 = 8;
-      s2 = 8.0;
+      s2 = 8 * ONE;
     }
 
   if (x5 == 1)
@@ -733,9 +762,9 @@ exceed_quadrant_limits(void)
       printf("  is hereby *denied*. Shut down your engines.\n\n");
       printf("Chief Engineer Scott reports:\n");
       /* @@@ printf("  Warp Engines shut down at sector %d, ", cint(s1)); */
-      printf("  Warp Engines shut down at sector %d, ", (int)s1);
+      printf("  Warp Engines shut down at sector %d, ", (int)(s1 / ONE));
       /* @@@ printf("%d of quadrant %d, %d.\n\n", cint(s2), q1, q2); */
-      printf("%d of quadrant %d, %d.\n\n", (int)s2, q1, q2);
+      printf("%d of quadrant %d, %d.\n\n", (int)(s2 / ONE), q1, q2);
     }
   /* else 
      new_quadrant(); @@@ this causes bugs when bouncing off galaxy walls.
@@ -752,7 +781,7 @@ exceed_quadrant_limits(void)
     end_of_time();
   */
 
-  if (t > t0 + t9)
+  if (t > (fixed)(t0 + t9) * ONE)
     end_of_time();
 
   /* @@@ what does this do?? It's in the original.
@@ -762,7 +791,7 @@ exceed_quadrant_limits(void)
     }
   */
 
-  t = t + 1;
+  t = t + ONE;
 
   new_quadrant();
 }
@@ -791,7 +820,7 @@ short_range_scan(void)
 
   strcpy(sC, "GREEN");
 
-  if (e < e0 * .1)
+  if (e < e0 / 10)
     strcpy(sC, "YELLOW");
 
   if (k3 > 0)
@@ -801,9 +830,9 @@ short_range_scan(void)
   d0 = 0;
 
   /* @@@ for (i = s1 - 1; i <= s1 + 1; i++) */
-  for (i = (int)(s1 - 1); i <= (int)(s1 + 1); i++)
+  for (i = (int)((s1 - ONE) / ONE); i <= (int)((s1 + ONE) / ONE); i++)
     /* @@@ for (j = s2 - 1; j <= s2 + 1; j++) */
-    for (j = (int)(s2 - 1); j <= (int)(s2 + 1); j++)
+    for (j = (int)((s2 - ONE) / ONE); j <= (int)((s2 + ONE) / ONE); j++)
       if (i >= 1 && i <= 8 && j >= 1 && j <= 8)
         {
           strcpy(sA, ">!<");
@@ -821,7 +850,7 @@ short_range_scan(void)
             }
         }
           
-  if (d[2] < 0.0)
+  if (d[2] < 0)
     {
       printf("\n*** Short Range Sensors are out ***\n");
       return;
@@ -834,14 +863,14 @@ short_range_scan(void)
         putchar(sQ[i * 24 + j]); 
 
       if (i == 0)
-    printf("    Stardate            %d\n", (int) t);
+    printf("    Stardate            %d\n", (int)(t / ONE));
       if (i == 1)
     printf("    Condition           %s\n", sC);
       if (i == 2)
     printf("    Quadrant            %d, %d\n", q1, q2);
       if (i == 3)
     /* @@@ printf("    Sector              %d, %d\n", cint(s1), cint(s2)); */
-    printf("    Sector              %d, %d\n", (int)s1, (int)s2);
+    printf("    Sector              %d, %d\n", (int)(s1 / ONE), (int)(s2 / ONE));
       if (i == 4)
     printf("    Photon Torpedoes    %d\n", p);
       if (i == 5)
@@ -861,7 +890,7 @@ long_range_scan(void)
 {
   register i, j;
 
-  if (d[3] < 0.0)
+  if (d[3] < 0)
     {
       printf("Long Range Sensors are inoperable.\n");
       return;
@@ -892,9 +921,8 @@ phaser_control(void)
   register i;
   int iEnergy;
   int h1, h;
-  string sTemp;
 
-  if (d[4] < 0.0)
+  if (d[4] < 0)
     {
       printf("Phasers Inoperative\n\n");
       return;
@@ -907,7 +935,7 @@ phaser_control(void)
       return;
     }
 
-  if (d[8] < 0.0)
+  if (d[8] < 0)
     /* @@@ printf("Computer failure happers accuracy.\n"); */
     printf("Computer failure hampers accuracy.\n");
 
@@ -916,7 +944,7 @@ phaser_control(void)
 
   printf("Number of units to fire: ");
 
-  fgets(sTemp, sizeof(sTemp), stdin);
+  input_line(sTemp, sizeof(sTemp));
 
   printf("\n");
 
@@ -933,9 +961,9 @@ phaser_control(void)
 
   e = e - iEnergy;
 
-  if (d[8] < 0.0)
+  if (d[8] < 0)
     /* @@@ iEnergy = iEnergy * rnd(); */
-    iEnergy = (int)(iEnergy * rnd());
+    iEnergy = (int)(iEnergy * rnd() / ONE);
 
   h1 = iEnergy / k3;
 
@@ -944,8 +972,8 @@ phaser_control(void)
       if (k[i][3] > 0)
         {
           /* @@@ h = (h1 / function_d(0) * (rnd() + 2)); */
-          h = (int)(h1 / function_d(0) * (rnd() + 2));
-          if (h <= .15 * k[i][3])
+          h = (int)((fixed)(h1 / function_d(0)) * (rnd() + 2 * ONE) / ONE);
+          if ((long)h * 100 <= 15L * k[i][3])
             {
               printf("Sensors show no damage to enemy at ");
               printf("%d, %d\n\n", k[i][1], k[i][2]);
@@ -984,9 +1012,8 @@ void
 photon_torpedoes(void)
 {
   /* @@@ int c2, c3, x3, y3, x5; */
-  int x3, y3, x5;
-  string sTemp;
-  double c1;
+  int i, x3, y3, x5;
+  fixed c1;
 
   if (p <= 0)
     {
@@ -994,7 +1021,7 @@ photon_torpedoes(void)
       return;
     }
 
-  if (d[5] < 0.0)
+  if (d[5] < 0)
     {
       printf("Photon Tubes not operational\n");
       return;
@@ -1002,17 +1029,17 @@ photon_torpedoes(void)
 
   printf("Course (0-9): ");
 
-  fgets(sTemp, sizeof(sTemp), stdin);
+  input_line(sTemp, sizeof(sTemp));
 
   printf("\n");
 
-  c1 = atof(sTemp);
+  c1 = parse_fixed(sTemp);
 
-  if (c1 == 9.0)
-    c1 = 1.0;
+  if (c1 == 9 * ONE)
+    c1 = ONE;
 
   /* @@@ if (c1 < 0 || c1 > 9.0) */
-  if (c1 < 1.0 || c1 > 9.0)
+  if (c1 < ONE || c1 > 9 * ONE)
     {
       printf("Ensign Chekov roports:\n");
       printf("  Incorrect course data, sir!\n\n");
@@ -1028,8 +1055,9 @@ photon_torpedoes(void)
   /* @@@ x1 = c[0][c2] + (c[0][c3] - c[0][c2]) * (c1 - c2); */
   /* @@@ x2 = c[1][c2] + (c[1][c3] - c[1][c2]) * (c1 - c2); */
 
-  x1 = c[1][(int)c1] + (c[1][(int)c1 + 1] - c[1][(int)c1]) * (c1 - (int)c1);
-  x2 = c[2][(int)c1] + (c[2][(int)c1 + 1] - c[2][(int)c1]) * (c1 - (int)c1);
+  i = (int)(c1 / ONE);
+  x1 = c[1][i] * ONE + (c[1][i + 1] - c[1][i]) * (c1 - i * ONE);
+  x2 = c[2][i] * ONE + (c[2][i + 1] - c[2][i]) * (c1 - i * ONE);
 
   x = s1 + x1;
   y = s2 + x2;
@@ -1115,7 +1143,7 @@ torpedo_hit(void)
       b3--;
       b9--;
 
-      if (b9 <= 0 && k9 <= t - t0 - t9)
+      if (b9 <= 0 && (fixed)k9 * ONE <= t - (fixed)(t0 + t9) * ONE)
         {
           printf("That does it, Captain!!");
           printf("You are hereby relieved of command\n");
@@ -1143,31 +1171,32 @@ void
 damage_control(void)
 { 
   int a1;
-  double d3 = 0.0;
+  fixed d3 = 0;
   register i;
 
-  if (d[6] < 0.0)
+  if (d[6] < 0)
     {
       printf("Damage Control report not available.\n");
 
       if (d0 == 0)
         return;
 
-      d3 = 0.0;
+      d3 = 0;
       for (i = 1; i <= 8; i++)
-        if (d[i] < 0.0)
-          d3 = d3 + .1;
+        if (d[i] < 0)
+          d3 = d3 + ONE / 10;
 
-      if (d3 == 0.0)
+      if (d3 == 0)
         return;
 
       d3 = d3 + d4;
-      if (d3 >= 1.0)
-        d3 = 0.9;
+      if (d3 >= ONE)
+        d3 = 900;
 
       printf("\nTechnicians standing by to effect repairs to your");
       /* @@@ printf("ship; Will you authorize the repair order (Y/N)? "); */
-      printf("ship;\nEstimated time to repair: %4.2f stardates.\n", d3);
+      printf("ship;\nEstimated time to repair: %s stardates.\n",
+        fixed_str(d3, 2));
       printf("Will you authorize the repair order (Y/N)? ");
 
       a1 = getchar();
@@ -1175,10 +1204,10 @@ damage_control(void)
       if (a1 == 'Y' || a1 == 'y')
         {
           for (i = 1; i <= 8; i++)
-            if (d[i] < 0.0)
-              d[i] = 0.0;
+            if (d[i] < 0)
+              d[i] = 0;
 
-          t = t + d3 + 0.1;
+          t = t + d3 + ONE / 10;
         }
     }
 
@@ -1192,7 +1221,7 @@ damage_control(void)
       for (i = 1; i < 25 - (int)strlen(sG2); i++)
       printf(" ");
       /* @@@ printf("%4.1f\n", d[r1]); */
-      printf("%4.2f\n", d[r1]);
+      printf("%s\n", fixed_str(d[r1], 2));
     }
 
   printf("\n");
@@ -1202,9 +1231,8 @@ void
 sheild_control(void)
 {
   int i;
-  string sTemp;
 
-  if (d[7] < 0.0)
+  if (d[7] < 0)
     {
       printf("Sheild Control inoperable\n");
       return;
@@ -1214,7 +1242,7 @@ sheild_control(void)
 
   printf("Input number of units to shields: ");
 
-  fgets(sTemp, sizeof(sTemp), stdin);
+  input_line(sTemp, sizeof(sTemp));
 
   printf("\n");
 
@@ -1244,9 +1272,7 @@ sheild_control(void)
 void
 library_computer(void)
 {
-  string sTemp;
-
-  if (d[8] < 0.0)
+  if (d[8] < 0)
     {
       printf("Library Computer inoperable\n");
       return;
@@ -1254,7 +1280,7 @@ library_computer(void)
 
   printf("Computer active and awating command: ");
 
-  fgets(sTemp, sizeof(sTemp), stdin);
+  input_line(sTemp, sizeof(sTemp));
   printf("\n");
 
   if (! strncmp(sTemp, "0", 1))
@@ -1323,9 +1349,9 @@ status_report(void)
 
   printf("Klingon%s Left: %d\n", sX, k9);
 
-  printf("Mission must be completed in %4.1f stardates\n",
+  printf("Mission must be completed in %s stardates\n",
     /* @@@ .1 * cint((t0 + t9 - t) * 10)); */
-    .1 * (int)((t0 + t9 - t) * 10));
+    fixed_str(((fixed)(t0 + t9) * ONE - t) / (ONE / 10) * (ONE / 10), 1));
 
   if (b9 < 1)
   {
@@ -1367,8 +1393,8 @@ torpedo_data(void)
   {
     if (k[i][3] > 0)
     {
-      w1 = k[i][1];
-      x  = k[i][2];
+      w1 = (fixed) k[i][1] * ONE;
+      x  = (fixed) k[i][2] * ONE;
       c1 = s1;
       a  = s2;
 
@@ -1387,8 +1413,8 @@ nav_data(void)
     return;
   }
 
-  w1 = b4;
-  x  = b5;
+  w1 = (fixed) b4 * ONE;
+  x  = (fixed) b5 * ONE;
   c1 = s1;
   a  = s2;
 
@@ -1398,28 +1424,26 @@ nav_data(void)
 void
 dirdist_calc(void)
 {
-  string sTemp;
-
   printf("Direction/Distance Calculator\n\n");
   printf("You are at quadrant %d,%d sector %d,%d\n\n", q1, q2,
     /* @@@ cint(s1), cint(s2)); */
-    (int)s1, (int)s2);
+    (int)(s1 / ONE), (int)(s2 / ONE));
     
   printf("Please enter initial X coordinate: ");
-  fgets(sTemp, sizeof(sTemp), stdin);
-  c1 = atoi(sTemp);
+  input_line(sTemp, sizeof(sTemp));
+  c1 = (fixed) atoi(sTemp) * ONE;
 
   printf("Please enter initial Y coordinate: ");
-  fgets(sTemp, sizeof(sTemp), stdin);
-  a = atoi(sTemp);
+  input_line(sTemp, sizeof(sTemp));
+  a = (fixed) atoi(sTemp) * ONE;
 
   printf("Please enter final X coordinate: ");
-  fgets(sTemp, sizeof(sTemp), stdin);
-  w1 = atoi(sTemp);
+  input_line(sTemp, sizeof(sTemp));
+  w1 = (fixed) atoi(sTemp) * ONE;
 
   printf("Please enter final Y coordinate: ");
-  fgets(sTemp, sizeof(sTemp), stdin);
-  x = atoi(sTemp);
+  input_line(sTemp, sizeof(sTemp));
+  x = (fixed) atoi(sTemp) * ONE;
 
   compute_vector();
 }
@@ -1480,30 +1504,30 @@ compute_vector(void)
   x = x - a;
   a = c1 - w1;
 
-  if (x <= 0.0)
+  if (x <= 0)
   {
-    if (a > 0.0)
+    if (a > 0)
     {    
-      c1 = 3.0;
+      c1 = 3 * ONE;
       sub2();
       return;
     }
     else
     {
-      c1 = 5.0;
+      c1 = 5 * ONE;
       sub1();
       return;
     }
   }
-  else if (a < 0.0)
+  else if (a < 0)
   {
-    c1 = 7.0;
+    c1 = 7 * ONE;
     sub2();
     return;
   }
   else
   {
-    c1 = 1.0;
+    c1 = ONE;
     sub1();
     return;
   }
@@ -1512,31 +1536,33 @@ compute_vector(void)
 void
 sub1(void)
 {
-  x = fabs(x);
-  a = fabs(a);
+  x = labs(x);
+  a = labs(a);
 
+  /* x and a are both 0 when the two points are the same. */
   if (a <= x)
-    printf("  DIRECTION = %4.2f\n", c1 + (a / x));
+    printf("  DIRECTION = %s\n", fixed_str(x ? c1 + (a * ONE / x) : c1, 2));
   else
-    printf("  DIRECTION = %4.2f\n", c1 + (((a * 2) - x) / a));
+    printf("  DIRECTION = %s\n", fixed_str(c1 + (((a * 2) - x) * ONE / a), 2));
 
-  printf("  DISTANCE = %4.2f\n\n", (x > a) ? x : a);
+  printf("  DISTANCE = %s\n\n", fixed_str((x > a) ? x : a, 2));
 }
 
 void
 sub2(void)
 {
-  x = fabs(x);
-  a = fabs(a);
+  x = labs(x);
+  a = labs(a);
 
+  /* x and a are both 0 when the two points are the same. */
   if (a >= x)
-    printf("  DIRECTION = %4.2f\n", c1 + (x / a));
+    printf("  DIRECTION = %s\n", fixed_str(a ? c1 + (x * ONE / a) : c1, 2));
   else
     /* @@@ printf("  DIRECTION = %4.2f\n\n", c1 + (((x * 2) - a) / x)); */
-    printf("  DIRECTION = %4.2f\n", c1 + (((x * 2) - a) / x));
+    printf("  DIRECTION = %s\n", fixed_str(c1 + (((x * 2) - a) * ONE / x), 2));
 
   /* @@@ printf("  DISTANCE = %4.2f\n", (x > a) ? x : a); */
-  printf("  DISTANCE = %4.2f\n\n", (x > a) ? x : a);
+  printf("  DISTANCE = %s\n\n", fixed_str((x > a) ? x : a, 2));
 }
 
 void
@@ -1551,7 +1577,7 @@ ship_destroyed(void)
 void
 end_of_time(void)
 {
-  printf("It is stardate %d.\n\n", (int) t);
+  printf("It is stardate %d.\n\n", (int)(t / ONE));
 
   resign_commision();
 }
@@ -1568,11 +1594,17 @@ resign_commision(void)
 void
 won_game(void)
 {
+  fixed r;
+
   printf("Congradulations, Captain!  The last Klingon Battle Cruiser\n");
   printf("menacing the Federation has been destoyed.\n\n");
  
-  if (t - t0 > 0)
-    printf("Your efficiency rating is %4.2f\n", 1000 * pow(k7 / (t - t0), 2));
+  if (t - (fixed) t0 * ONE > 0)
+    {
+      /* k7 / (t - t0) in hundredths */
+      r = (fixed) k7 * 100 * ONE / (t - (fixed) t0 * ONE);
+      printf("Your efficiency rating is %s\n", fixed_str(r * r * 100, 2));
+    }
 
   end_of_game();
 }
@@ -1580,8 +1612,6 @@ won_game(void)
 void
 end_of_game(void)
 {
-  string sTemp;
-
   if (b9 > 0)
     {
       printf("The Federation is in need of a new starship commander");
@@ -1589,14 +1619,14 @@ end_of_game(void)
       printf("If there is a volunteer, let him step forward and");
       printf(" enter 'aye': ");
 
-      fgets(sTemp, sizeof(sTemp), stdin);
+      input_line(sTemp, sizeof(sTemp));
       printf("\n");
 
       if (! strncmp(sTemp, "aye", 3))
-        new_game();
+        bNewGame = TRUE;
     }
 
-  exit(0);
+  longjmp(jbGameOver, 1);
 }
 
 void
@@ -1643,10 +1673,10 @@ klingons_shoot(void)
     {
       if (k[i][3] > 0)
         {
-          h = (int) ((k[i][3] / function_d(i)) * (2 + rnd()));
+          h = (int) ((fixed)(k[i][3] / function_d(i)) * (2 * ONE + rnd()) / ONE);
           s = s - h;
           /* @@@ k[i][3] = k[i][3] / (3 + rnd()); */
-          k[i][3] = (int)(k[i][3] / (3 + rnd()));
+          k[i][3] = (int)((fixed) k[i][3] * ONE / (3 * ONE + rnd()));
 
           printf("%d unit hit on Enterprise from sector ", h);
           printf("%d, %d\n", k[i][1], k[i][2]);
@@ -1661,10 +1691,10 @@ klingons_shoot(void)
 
           if (h >= 20)
             {
-              if (rnd() <= 0.6 || (h / s) > 0.2)
+              if (rnd() <= 600 || (h / s) > 0)
                 {
                   r1 = function_r();
-                  d[r1] = d[r1] - (h / s) - (0.5 * rnd());
+                  d[r1] = d[r1] - (fixed)(h / s) * ONE - rnd() / 2;
 
                   get_device_name();
 
@@ -1680,21 +1710,21 @@ void
 repair_damage(void)
 {
   int i;
-  double d6;              /* Repair Factor */
+  fixed d6;               /* Repair Factor */
 
   d6 = w1;
 
-  if (w1 >= 1.0)
+  if (w1 >= ONE)
     d6 = w1 / 10;
 
   for (i = 1; i <= 8; i++)
     {
-      if (d[i] < 0.0)
+      if (d[i] < 0)
         {
           d[i] = d[i] + d6;
-          if (d[i] > -0.1 && d[i] < 0)
-            d[i] = -0.1;
-          else if (d[i] >= 0.0)
+          if (d[i] > -ONE / 10 && d[i] < 0)
+            d[i] = -ONE / 10;
+          else if (d[i] >= 0)
             {
               if (d1 != 1)
                 d1 = 1;
@@ -1707,20 +1737,20 @@ repair_damage(void)
         }
     }
 
-  if (rnd() <= 0.2)
+  if (rnd() <= 200)
     {
       r1 = function_r();
 
-      if (rnd() < .6)
+      if (rnd() < 600)
         {
-          d[r1] = d[r1] - (rnd() * 5.0 + 1.0);
+          d[r1] = d[r1] - (rnd() * 5 + ONE);
           printf("Damage Control report:\n");
           get_device_name();
           printf("    %s damaged\n\n", sG2);
         }
       else
         {
-          d[r1] = d[r1] + (rnd() * 3.0 + 1.0);
+          d[r1] = d[r1] + (rnd() * 3 + ONE);
           printf("Damage Control report:\n");
           get_device_name();
           printf("    %s state of repair improved\n\n", sG2);
@@ -1756,7 +1786,7 @@ insert_in_quadrant(void)
   int i, j = 0;
 
   /* @@@ s8 = ((z2 - 1) * 3) + ((z1 - 1) * 24) + 1; */
-  s8 = ((int)(z2 - 0.5) * 3) + ((int)(z1 - 0.5) * 24) + 1;
+  s8 = ((z2 - 1) * 3) + ((z1 - 1) * 24) + 1;
 
   for (i = s8 - 1; i <= s8 + 1; i++)
     sQ[i] = sA[j++];
@@ -1785,9 +1815,6 @@ string_compare(void)
 {
   int i;
   char sB[4];
-
-  z1 = (int)(z1 + 0.5);
-  z2 = (int)(z2 + 0.5);
 
   s8 = ((z2 - 1) * 3) + ((z1 - 1) * 24) + 1;
 
@@ -1834,9 +1861,12 @@ int
 function_d(int i)
 {
   int j;
+  fixed dx, dy;
 
   /* @@@ j = sqrt(pow((k[i][1] - s1), 2) + pow((k[i][2] - s2), 2)); */
-  j = (int)sqrt(pow((k[i][1] - s1), 2) + pow((k[i][2] - s2), 2));
+  dx = (fixed) k[i][1] * ONE - s1;
+  dy = (fixed) k[i][2] * ONE - s2;
+  j = (int)(isqrt(dx * dx + dy * dy) / ONE);
 
   return j;
 }
@@ -1860,16 +1890,128 @@ mid_str(char *a, char *b, int x, int y)
   *a = '\0';
 }
 
-/* Round off floating point numbers instead of truncating */
+/* Round off fixed-point numbers instead of truncating */
 
 int
-cint (double d)
+cint (fixed d)
 {
   int i;
 
-  i = (int) (d + 0.5);
+  i = (int) ((d + ONE / 2) / ONE);
 
   return(i);
+}
+
+/* Reads a decimal number such as "2.5" from s as atof() would, to three
+ * decimal places; further digits are ignored. */
+
+fixed
+parse_fixed(char *s)
+{
+  fixed v = 0;
+  fixed unit = ONE;
+  bool bNeg = FALSE;
+
+  while (*s == ' ' || *s == '\t')
+    s++;
+
+  if (*s == '-' || *s == '+')
+    bNeg = (*s++ == '-');
+
+  while (*s >= '0' && *s <= '9')
+    v = v * 10 + (*s++ - '0') * ONE;
+
+  if (*s == '.')
+    {
+      s++;
+      while (*s >= '0' && *s <= '9')
+        {
+          unit /= 10;
+          v = v + (*s++ - '0') * unit;
+        }
+    }
+
+  return bNeg ? -v : v;
+}
+
+/* Formats v rounded to places (1 or 2) decimal places, at least four
+ * characters wide, as printf's %4.1f or %4.2f would. The result is in a
+ * static buffer that the next call overwrites. */
+
+char *
+fixed_str(fixed v, int places)
+{
+  static char sBuf[16];
+  char sNum[16];
+  fixed unit = (places == 1) ? ONE / 10 : ONE / 100;
+  bool bNeg = (v < 0);
+
+  if (bNeg)
+    v = -v;
+
+  v = (v + unit / 2) / unit;
+
+  if (places == 1)
+    sprintf(sNum, "%s%ld.%01ld", bNeg ? "-" : "", v / 10, v % 10);
+  else
+    sprintf(sNum, "%s%ld.%02ld", bNeg ? "-" : "", v / 100, v % 100);
+
+  sprintf(sBuf, "%4s", sNum);
+
+  return sBuf;
+}
+
+/* Returns the integer square root of v, rounded down. */
+
+long
+isqrt(long v)
+{
+  long r = 0;
+  long bit = 1L << 30;
+
+  while (bit > v)
+    bit >>= 2;
+
+  while (bit != 0)
+    {
+      if (v >= r + bit)
+        {
+          v -= r + bit;
+          r = (r >> 1) + bit;
+        }
+      else
+        r >>= 1;
+      bit >>= 2;
+    }
+
+  return r;
+}
+
+/* Reads a line from the console with BDOS function 10 into s, ending it
+ * with a newline as fgets() would. CP/M ends a console line with a carriage
+ * return, which fgets() on stdin does not take as the end of the line.
+ * Function 10 echoes only the carriage return, so a line feed follows it,
+ * as a terminal's echo of the end of the line would give. */
+
+void
+input_line(char *s, int iSize)
+{
+  int iLen;
+
+  fflush(stdout);
+
+  /* Function 10 fills s from s[2], with the maximum length in s[0] and
+   * the length read in s[1]. */
+  s[0] = iSize - 2;
+  s[1] = 0;
+  cpm_readline((uint8_t *) s);
+  cpm_conout('\n');
+
+  iLen = (uint8_t) s[1];
+  memmove(s, s + 2, iLen);
+
+  s[iLen] = '\n';
+  s[iLen + 1] = '\0';
 }
 
 void
@@ -1943,12 +2085,13 @@ get_rand(int iSpread)
   return((rand() % iSpread) + 1);
 }
 
-double
+/* Returns a fixed-point number from 0 to 1 */
+fixed
 rnd(void)
 {
-  double d;
+  fixed d;
 
-  d = rand() / (double) RAND_MAX;
+  d = (fixed) rand() * ONE / RAND_MAX;
   
   return(d);
 }
