@@ -1,0 +1,9 @@
+	.Z80
+
+	public	MEMEND
+
+	dseg
+
+MEMEND:
+
+	end

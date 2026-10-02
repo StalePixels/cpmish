@@ -12,6 +12,7 @@ for f in [
     "main",
     "fileio",
     "cmds",
+    "memend",
 ]:
     zmac(name=f, src=f"./{f}.mac", deps=["./ted.inc"])
 
@@ -43,6 +44,7 @@ for v in VERSIONS:
                 ".+scrn_" + v,
                 ".+cmds",
                 ".+cpmio",
+                ".+memend",
             ]
         },
     )

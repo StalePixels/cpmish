@@ -45,6 +45,7 @@
 	extrn	WCREAT,FREAD,FWRITE,WCLOSE,WDELET,GETCML
 	extrn	GETC,UNGETC,PUTC,TTQCLR,TTINIT,UCASE
 	extrn	HLDEC,SCRX,UFLAG,UPDST
+	extrn	MEMEND
 
 	; needed for debugging
 
@@ -2243,7 +2244,7 @@ NOMEM:	ld	hl,ERRMEM	; 'NO MEM SPACE'
 STACK	equ	$
 
 	public	$MEMRY
-$MEMRY:	ds	2
+$MEMRY:	dw	MEMEND
 
 FSTREC:	dw	0		; record number of the first line of text
 CURREC:	dw	0		; record number of the current line
