@@ -5,6 +5,7 @@ VERSIONS = [
     "NC200",
     "WP2450DS",
     "POWERNOTE",
+    "DPM",
 ]
 
 for f in [

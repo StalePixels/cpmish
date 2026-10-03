@@ -11,6 +11,7 @@ libcuss_terminals = [
     "SPECTRUM_PLUS_THREE",
     "SPECTRUM_NEXT",
     "NANOZ80",
+    "DPM",
 ]
 
 for terminal in libcuss_terminals:

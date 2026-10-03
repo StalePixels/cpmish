@@ -6,6 +6,7 @@ VERSIONS = [
     "NC200",
     "WP2450DS",
     "POWERNOTE",
+    "DPM",
 ]
 
 for version in VERSIONS:
