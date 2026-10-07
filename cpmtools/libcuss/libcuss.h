@@ -63,7 +63,7 @@ extern void con_revoff(void);
 	#define LIBCUSS_ADM3
 #elif defined LIBCUSS_DPM
 	#define SCREENWIDTH 80
-	#define SCREENHEIGHT 24
+	#define SCREENHEIGHT 30
 	#define LIBCUSS_VT52
 	#define LIBCUSS_NO_REVERSE
 #else

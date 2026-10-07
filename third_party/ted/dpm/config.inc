@@ -1,3 +1,3 @@
 HSIZE	equ 80
-VSIZE	equ 24
+VSIZE	equ 30
 VT52	equ TRUE
