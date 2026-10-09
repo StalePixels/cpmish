@@ -64,8 +64,7 @@ extern void con_revoff(void);
 #elif defined LIBCUSS_DPM
 	#define SCREENWIDTH 80
 	#define SCREENHEIGHT 30
-	#define LIBCUSS_VT52
-	#define LIBCUSS_NO_REVERSE
+	#define LIBCUSS_ANSI
 #else
     #error "No libcuss configuration specified."
 #endif
@@ -105,7 +104,7 @@ extern void con_revoff(void);
 #endif
 
 #if defined LIBCUSS_ANSI
-	#define LIBCUSS_CLEAR "\033[2J"
+	#define LIBCUSS_CLEAR "\033[H\033[2J"
 	#define LIBCUSS_CLEAREOL "\033[K"
 	#define LIBCUSS_NEWLINE "\r\n"
 	#define LIBCUSS_REVON "\033[7m"

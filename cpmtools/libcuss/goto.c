@@ -36,10 +36,10 @@ void con_goto(uint16_t x, uint16_t y)
 		{
 			static char buffer[10];
 			cpm_printstring0("\033[");
-			itoa(y, buffer, 10);
+			itoa(y + 1, buffer, 10);
 			cpm_printstring0(buffer);
 			cpm_bios_conout(';');
-			itoa(x, buffer, 10);
+			itoa(x + 1, buffer, 10);
 			cpm_printstring0(buffer);
 			cpm_bios_conout('H');
 		}

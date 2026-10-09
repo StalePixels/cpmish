@@ -1,5 +1,5 @@
 z180	    equ	false
-conterm	    equ	vt52
+conterm	    equ	ansi
 auxterm	    equ	none
 CPM3	    equ	false
 SCRHT       equ 30

@@ -23,7 +23,7 @@ export(
         ".obj/dpm/stat.com": "cpmtools+stat",
         ".obj/dpm/submit.com": "cpmtools+submit",
         ".obj/dpm/qe.com": "cpmtools+qe_DPM",
-        ".obj/dpm/bbcbasic.com": "third_party/bbcbasic+bbcbasic_VT52",
+        ".obj/dpm/bbcbasic.com": "third_party/bbcbasic+bbcbasic_ANSI",
         ".obj/dpm/camel80.com": "third_party/camelforth",
         ".obj/dpm/asm80.com": "third_party/dr/asm80",
         ".obj/dpm/ted.com": "third_party/ted+ted_DPM",

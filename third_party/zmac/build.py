@@ -8,7 +8,7 @@ bison(name="parser", src="./zmac.y")
 cprogram(
     name="doc",
     srcs=["./doc.c"],
-    cflags=["-DDOC_DEBUG", "-Ddoc=main", "-Wno-main"],
+    cflags=["-DMK_DOC"],
 )
 
 simplerule(
